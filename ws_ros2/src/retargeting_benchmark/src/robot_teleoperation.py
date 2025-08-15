@@ -60,7 +60,7 @@ class RobotTeleoperation:
         self.retarget_type = "VECTOR_WRIST_JOINT"  # "POSITION", "VECTOR", "DEXMV", "DEXPILOT", "VECTOR_WRIST_JOINT", "VECTOR_WRIST_JOINT_2"
         self.setting_id = 3
 
-        self.ablation_option = 8
+        self.ablation_option = 0
         # 0: full
         # 1: without pinch
         # 2: actual pinch distance
