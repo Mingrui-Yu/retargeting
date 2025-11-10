@@ -66,7 +66,7 @@ def rebuild_stream_data(data_dict):
 class RobotTeleoperationMain:
     def __init__(self):
         # --------- hyper-parameters ---------
-        self.hand_type = "shadow"  # "leap" or "shadow"
+        self.hand_type = "leap"  # "leap" or "shadow"
         if self.hand_type == "leap":
             urdf_file_name = os.readlink("assets/panda_leap_paxini.urdf")  # no touch bodies/joints/sensors
             actuated_joints_name = [f"panda_joint{i+1}" for i in range(7)] + [f"joint_{i}" for i in range(16)]
@@ -181,11 +181,11 @@ class RobotTeleoperationMain:
 
     def main(self):
         # ----------- hyper-parameters -----------
-        project_dir = "/home/starxin/retarget_benchmark-main"
+        project_dir = "/home/mingrui/mingrui/research/retargeting"
         save_dir = os.path.join(project_dir, f"data/teleop_process/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}")
         os.makedirs(save_dir, exist_ok=True)
         if self.load_offline_data:
-            file_name = os.path.join(project_dir, "data/test_teleop/vision_pro/data_2025-03-20_21-35-42.npz")
+            file_name = os.path.join(project_dir, "data/test_teleop/vision_pro/data_2025-01-16_20-27-43.npz")
             data_dict = self.load_data(file_name)
             stream_data = data_dict["stream"]
 

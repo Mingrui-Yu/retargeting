@@ -67,11 +67,14 @@ In this repository, we provide:
 
 ```bash
 # launch the rviz
+cd ws_ros2
+source install/setup.bash
 ros2 launch retargeting_benchmark rviz_vis_paxini.py
 
 # launch the retargeting module
-cd ws_ros2
-python src/retargeting_benchmark/src/main_robot_teleoperation.py
+cd retargeting
+source ws_ros2/install/setup.bash
+python ws_ros2/src/retargeting_benchmark/src/main_robot_teleoperation.py
 ```
 
 ## Development
