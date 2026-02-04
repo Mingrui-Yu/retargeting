@@ -1,4 +1,35 @@
 ---
+layout: none
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="refresh" content="0; url=https://star-xcd.github.io/retargeting/" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Canonical link for the paper -->
+  <link rel="canonical" href="https://star-xcd.github.io/retargeting/" />
+
+  <title>Redirecting…</title>
+
+  <script>
+    window.location.replace("https://star-xcd.github.io/retargeting/");
+  </script>
+</head>
+
+<body>
+  <p>This project page has moved.</p>
+  <p>
+    Redirecting to
+    <a href="https://star-xcd.github.io/retargeting/">the updated website</a>.
+  </p>
+</body>
+</html>
+
+
+<!-- ---
 layout: default
 title: "Analyzing Key Objectives in Human-to-Robot Retargeting for Dexterous Manipulation"
 ---
@@ -66,4 +97,4 @@ Experimental results and conclusions provide valuable insights for designing mor
 
 If you have any question, feel free to contact the authors: Mingrui Yu, [mingruiyu98@gmail.com](mailto:mingruiyu98@gmail.com) .
 
-Mingrui Yu's Homepage is at [mingrui-yu.github.io](https://mingrui-yu.github.io).
+Mingrui Yu's Homepage is at [mingrui-yu.github.io](https://mingrui-yu.github.io). -->
