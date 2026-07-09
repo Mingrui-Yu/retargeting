@@ -6,6 +6,11 @@ ws_ros2/*
 ws_ros2/src/realsense-ros
 # ws_ros2/src/leaphand_ros2_module
 # data/*
+outputs/
+data/teleop_process/
+data/simulation/**/*.npz
+data/experiments/plot/
+temps/*
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

@@ -1,8 +1,7 @@
-import os
 import sys
 import time
+from pathlib import Path
 from threading import Thread
-from typing import List
 
 import numpy as np
 import rclpy
@@ -18,9 +17,9 @@ from utils.utils_keyboard import KeyboardListener
 class RobotControlMain:
     def __init__(self):
         # --------- hyper-parameters ---------
-        urdf_file_name = os.readlink("assets/panda_leap_tac3d.urdf")  # no touch bodies/joints/sensors
+        repo_root = Path(__file__).resolve().parents[4]
+        urdf_file_name = str(repo_root / "assets/robots/panda_leap_paxini/urdf/panda_leap_paxini.urdf")
         actuated_joints_name = [f"panda_joint{i+1}" for i in range(7)] + [f"joint_{i}" for i in range(16)]
-        touch_joints_name: List[str] = []
         self.joint_vel_max = np.array([0.1] * 7 + [0.5] * 16)
         self.use_hardware = True
         self.use_virtual_hardware = False
@@ -45,7 +44,6 @@ class RobotControlMain:
         self.robot_adaptor = RobotAdaptor(
             robot_model=self.robot_model,
             actuated_joints_name=actuated_joints_name,
-            touch_joints_name=touch_joints_name,
         )
         self.robot_control = RobotControl(
             robot_model=self.robot_model,

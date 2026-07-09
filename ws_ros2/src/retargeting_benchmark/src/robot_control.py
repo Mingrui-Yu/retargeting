@@ -40,10 +40,6 @@ class RobotControl:
         use_high_freq_interp: bool = False,
         node: Optional[Node] = None,
     ):
-        # --------- hyper-parameters ---------
-        mjcf_file_name = "assets/panda_leap_tac3d_asset.xml"
-        # -------------------------------------
-
         self.robot_model = robot_model
         self.robot_adaptor = robot_adaptor
         self.use_hardware = use_hardware
@@ -58,7 +54,6 @@ class RobotControl:
             )
             self.env.wait_for_initialization()
         else:
-            # self.env = RobotMujoco(mjcf_file_name)
             self.env = RobotPinocchioEnv(robot_model, node)
 
         self.init_joint_pos = np.zeros((self.robot_adaptor.doa))

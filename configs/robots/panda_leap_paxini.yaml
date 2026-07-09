@@ -1,0 +1,91 @@
+# @package robot
+name: panda_leap_paxini
+hand_type: leap
+model:
+  type: urdf
+  path: assets/robots/panda_leap_paxini/urdf/panda_leap_paxini.urdf
+  path_is_symlink: false
+actuated_joints:
+  - panda_joint1
+  - panda_joint2
+  - panda_joint3
+  - panda_joint4
+  - panda_joint5
+  - panda_joint6
+  - panda_joint7
+  - joint_0
+  - joint_1
+  - joint_2
+  - joint_3
+  - joint_4
+  - joint_5
+  - joint_6
+  - joint_7
+  - joint_8
+  - joint_9
+  - joint_10
+  - joint_11
+  - joint_12
+  - joint_13
+  - joint_14
+  - joint_15
+initial_qpos:
+  - 0.21511886
+  - -0.15896096
+  - -0.80094644
+  - -2.59708501
+  - -0.36324861
+  - 2.30919053
+  - 0.4965313
+  - 0
+  - 0.1
+  - 0.1
+  - 0.1
+  - 0
+  - 0.1
+  - 0.1
+  - 0.1
+  - 0
+  - 0.1
+  - 0.1
+  - 0
+  - 0.1
+  - 0
+  - 0.1
+  - 0.1
+# Frames whose poses are recorded for replay, visualization, and debugging.
+# They do not define actuated joints or retargeting optimization targets.
+visual_frame_names:
+  - wrist
+  - thumb_tip_center
+  - finger1_tip_center
+  - finger2_tip_center
+  - finger3_tip_center
+  - thumb_tip_center_lower
+  - finger1_tip_center_lower
+  - finger2_tip_center_lower
+  - finger3_tip_center_lower
+wrist_frame_name: wrist
+human_hand_scale: 1.5
+benchmark:
+  wrist_link_name: wrist
+  # Benchmark mappings bind each robot fingertip frame to the corresponding
+  # MANO fingertip keypoint and direction segment.
+  fingertips:
+    - link_name: thumb_tip_center
+      human_tip_index: 4
+      human_direction_base_index: 3
+      robot_direction_axis: x
+      is_thumb: true
+    - link_name: finger1_tip_center
+      human_tip_index: 8
+      human_direction_base_index: 7
+      robot_direction_axis: x
+    - link_name: finger2_tip_center
+      human_tip_index: 12
+      human_direction_base_index: 11
+      robot_direction_axis: x
+    - link_name: finger3_tip_center
+      human_tip_index: 16
+      human_direction_base_index: 15
+      robot_direction_axis: x

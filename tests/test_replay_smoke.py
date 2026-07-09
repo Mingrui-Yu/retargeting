@@ -1,0 +1,222 @@
+from pathlib import Path
+import sys
+import types
+
+import pytest
+
+
+# Phase-0 regression tests for the current research-code layout.
+#
+# These tests intentionally exercise only headless paths: no ROS, no RViz, no
+# camera, no hardware, and no MuJoCo/Open3D viewer. They protect the existing
+# repo-relative assets, the promoted AVP replay fixture, Pinocchio model loading,
+# RobotAdaptor joint mapping, and one optimizer call before larger refactors.
+FIXTURE = Path("tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz")
+
+
+def _np():
+    return pytest.importorskip("numpy")
+
+
+def _load_fixture():
+    np = _np()
+    return np.load(FIXTURE)
+
+
+def _stream_frame(data, frame_idx=0):
+    return {
+        key.removeprefix("stream_"): value[frame_idx]
+        for key, value in data.items()
+        if key.startswith("stream_")
+    }
+
+
+def test_phase4_asset_layout_is_available():
+    # Phase 4 keeps robot model paths under assets/robots. Root-level URDF
+    # symlinks were removed after legacy entrypoints moved to current paths.
+    for urdf_path in [
+        Path("assets/robots/panda_leap_paxini/urdf/panda_leap_paxini.urdf"),
+        Path("assets/robots/panda_shadow/urdf/panda_shadow.urdf"),
+    ]:
+        assert urdf_path.is_file()
+
+    for removed_legacy_urdf_link in [
+        Path("assets/panda_leap_paxini.urdf"),
+        Path("assets/panda_shadow.urdf"),
+    ]:
+        assert not removed_legacy_urdf_link.exists()
+
+
+def test_avp_teleop_replay_fixture_shape_and_expected_qpos():
+    # The fixture is a promoted offline AVP teleoperation replay.
+    # It pins the stream tensor shapes and the first recorded retargeted qpos.
+    np = _np()
+    data = _load_fixture()
+
+    assert data["stream_right_wrist"].shape == (760, 1, 4, 4)
+    assert data["stream_right_fingers"].shape == (760, 25, 4, 4)
+    assert data["retarget_qpos"].shape == (760, 23)
+    assert np.isfinite(data["retarget_qpos"]).all()
+
+    expected_first_qpos = np.array(
+        [
+            0.00875867996364832,
+            -0.7382485713556766,
+            -0.07347981631755829,
+            -2.3194164472804544,
+            0.04033493250608444,
+            1.601985483565998,
+            2.1532108026729104,
+            -0.0005586452898569405,
+            0.11768739268183707,
+            0.11215394333004951,
+            0.10800079226493835,
+            -0.0007274928502738476,
+            0.11521222040057182,
+            0.11009211063385009,
+            0.1064139787852764,
+            -0.0007787310751155019,
+            0.11381804168224334,
+            0.10910807147622108,
+            0.10574997931718826,
+            0.03051988035440445,
+            0.005901265423744917,
+            0.09606269717216491,
+            0.09836528234183788,
+        ]
+    )
+    np.testing.assert_allclose(data["retarget_qpos"][0], expected_first_qpos, rtol=0, atol=1e-12)
+
+
+def test_vision_pro_detector_static_detect_headless(monkeypatch):
+    # Exercise only VisionProDetector.detect(), which is a pure parser for an
+    # already-recorded stream frame. A fake avp_stream module avoids requiring
+    # the live Vision Pro dependency on the server.
+    _np()
+    pytest.importorskip("scipy")
+
+    fake_avp_stream = types.ModuleType("avp_stream")
+    fake_avp_stream.VisionProStreamer = object
+    monkeypatch.setitem(sys.modules, "avp_stream", fake_avp_stream)
+
+    from retargeting.vision_pro_detector import VisionProDetector
+
+    data = _load_fixture()
+    stream = _stream_frame(data, frame_idx=0)
+    num_box, hand_kps, _, wrist_pose = VisionProDetector.detect(stream)
+
+    assert num_box == 1
+    assert hand_kps.shape == (21, 3)
+    assert wrist_pose.shape == (4, 4)
+
+
+def test_robot_pinocchio_loads_current_urdf_headless():
+    # Verify that the configured Panda+Leap URDF loads in Pinocchio and exposes
+    # the frame names required by the current retargeting objective.
+    pytest.importorskip("pinocchio")
+
+    from retargeting.config import load_robot_config
+    from retargeting.robot_pinocchio import RobotPinocchio
+
+    robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
+    robot = RobotPinocchio(robot_config.robot_file_path, robot_config.model.type)
+
+    assert robot.dof > 0
+    for frame_name in [
+        "wrist",
+        "thumb_tip_center",
+        "finger1_tip_center",
+        "finger2_tip_center",
+        "finger3_tip_center",
+        "thumb_tip_center_lower",
+    ]:
+        assert frame_name in robot.frame_names
+
+
+def test_robot_adaptor_forward_backward_qpos_round_trip():
+    # Protect the current actuated-joint mapping. Later config migration should
+    # preserve this round-trip behavior for Panda+Leap.
+    np = _np()
+    pytest.importorskip("pinocchio")
+
+    from retargeting.config import load_robot_config
+    from retargeting.robot_adaptor import RobotAdaptor
+    from retargeting.robot_pinocchio import RobotPinocchio
+
+    robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
+    robot_model = RobotPinocchio(robot_config.robot_file_path, robot_config.model.type)
+    adaptor = RobotAdaptor(
+        robot_model,
+        actuated_joints_name=list(robot_config.actuated_joints),
+    )
+
+    qpos_doa = np.linspace(-0.01, 0.01, adaptor.doa)
+    qpos_dof = adaptor.forward_qpos(qpos_doa)
+
+    assert qpos_dof.shape == (robot_model.dof,)
+    np.testing.assert_allclose(adaptor.backward_qpos(qpos_dof), qpos_doa)
+
+    jacobian = np.zeros((2, 6, robot_model.dof))
+    assert adaptor.backward_jacobian(jacobian).shape == (2, 6, adaptor.doa)
+
+
+def test_vector_wrist_joint_optimizer_single_frame_smoke():
+    # Minimal optimizer smoke test: construct the current VectorWristJoint
+    # objective and run one retarget() call. This checks that the optimization
+    # chain is executable, not that the generated pose is semantically good.
+    np = _np()
+    pytest.importorskip("pinocchio")
+    pytest.importorskip("nlopt")
+    pytest.importorskip("torch")
+
+    from retargeting.retarget_optimizer import VectorWristJointOptimizer
+    from retargeting.config import load_retargeting_config, load_robot_config
+    from retargeting.robot_adaptor import RobotAdaptor
+    from retargeting.robot_pinocchio import RobotPinocchio
+
+    robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
+    retargeting_config = load_retargeting_config("configs/retargeting/vector_wrist_joint.yaml")
+    robot_model = RobotPinocchio(robot_config.robot_file_path, robot_config.model.type)
+    adaptor = RobotAdaptor(
+        robot_model,
+        actuated_joints_name=list(robot_config.actuated_joints),
+    )
+
+    target_config = retargeting_config.targets_for(robot_config.hand_type)
+    target_link_pairs = target_config.link_pairs
+    optimizer = VectorWristJointOptimizer(
+        robot_adaptor=adaptor,
+        targets={
+            "origin_links_name": [pair[0] for pair in target_link_pairs],
+            "task_links_name": [pair[1] for pair in target_link_pairs],
+            "wrist_link_name": target_config.wrist_link_name,
+        },
+        params={**retargeting_config.optimizer_params, "opt_maxtime": 0.01},
+        joint_limit_overrides=[
+            {
+                "indices": list(override.indices),
+                "lower": override.lower,
+                "upper": override.upper,
+            }
+            for override in retargeting_config.joint_limit_overrides
+        ],
+    )
+
+    qpos_init = _load_fixture()["retarget_qpos"][0].copy()
+    ref_values = {
+        "links_vec": np.zeros((len(target_link_pairs), 3)),
+        "wrist_quat": np.array([1.0, 0.0, 0.0, 0.0]),
+        "qpos_doa": qpos_init.copy(),
+        "qpos_doa_last": qpos_init.copy(),
+        "weights": {
+            "links_vec": np.ones(len(target_link_pairs)),
+            "wrist_rot": 0.0,
+            "joint_pos": np.zeros(adaptor.doa),
+            "joint_vel": np.zeros(adaptor.doa),
+        },
+    }
+
+    qpos = optimizer.retarget(ref_values)
+
+    assert qpos.shape == (adaptor.doa,)
+    assert np.isfinite(qpos).all()

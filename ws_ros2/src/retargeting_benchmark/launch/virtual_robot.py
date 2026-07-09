@@ -13,7 +13,7 @@ def generate_launch_description():
     urdf_file = os.path.join(
         get_package_share_directory("my_robot_description"),
         "urdf",
-        "panda_leap_tac3d.xacro",
+        "panda_leap_paxini.xacro",
     )
     panda_mesh_dir = "package://my_robot_description/urdf/panda/meshes/"
     leap_mesh_dir = "package://my_robot_description/urdf/leap_hand/meshes/"

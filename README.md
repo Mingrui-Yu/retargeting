@@ -1,155 +1,338 @@
 # Analyzing Key Objectives in Human-to-Robot Retargeting for Dexterous Manipulation
 
-[[Project website](https://mingrui-yu.github.io/retargeting/)]
+[[Project website](https://star-xcd.github.io/retargeting/)] [[arXiv](https://arxiv.org/abs/2506.09384)]
 
-Repository for Paper "Analyzing Key Objectives in Human-to-Robot Retargeting for Dexterous Manipulation".
+This repository contains the code for the paper "Analyzing Key Objectives in Human-to-Robot Retargeting for Dexterous Manipulation".
 
-In this repository, we provide:
+It provides:
 
-- The human-to-robot retargeting algorithm.
-- The interface of human hand detection based on RGB image or Apple Vision Pro.
-- An Rviz-based visualizer to visualize the retargeting results.
+- A Python core package for human-to-robot dexterous-hand retargeting.
+- Config-driven robot, asset, and retargeting setup.
+- Offline replay tooling for quick inspection without ROS or hardware.
+- Optional ROS2/RViz, live input, and real robot adapters.
 
 <div align="center">
   <img src="./docs/overview.jpg" alt="retargeting" width="50%" />
 </div>
 
-## Installation
+## Repository Layout
 
-1. Ubuntu 22.04.
+| Path | Purpose |
+| --- | --- |
+| `src/retargeting/` | Core Python package for offline replay, config loading, kinematics, and retargeting logic. |
+| `src/retargeting_ros/` | Optional ROS adapter package for ROS messages, RViz, and real robot integration. |
+| `configs/` | Robot, retargeting, and app-level YAML configs. |
+| `assets/robots/` | Robot URDF/MJCF assets organized by robot. |
+| `assets/meshes/` | Shared component meshes used by robot assets. |
+| `tests/fixtures/` | Replay fixtures used by smoke tests and quickstart examples. |
+| `outputs/` | Default location for generated teleop, simulation, benchmark, and plot outputs. This path is gitignored. |
+| `ws_ros2/` | ROS2 workspace packages, launch files, robot descriptions, and compatibility entrypoints. |
 
-1. To use ros2 with conda, the python version of the virtual env must be consistent with the system python. In addition, install Pinocchio when creating the virtual env.
+The intended dependency direction is:
 
-   ```shell
-   # e.g., ubuntu 22.04
-   conda create -n <your_env_name> -c conda-forge python=3.10.12 pinocchio
-   ```
+```text
+configs/assets -> retargeting core -> apps/CLI -> retargeting_ros / hardware / visualization
+```
 
-1. Install [PyTorch](https://pytorch.org/).
+The core `retargeting` package should be usable without ROS, cameras, RViz, or real robot hardware.
 
-1. Install:
+## Install
 
-   ```bash
-   pip install numpy
-   pip install mujoco
-   pip install nlopt
-   pip install pynput
-   pip install opencv-python
-   pip install mediapipe # for RGB-based hand detection
-   pip install avp_stream # for Vision-Pro
-   ```
-
-1. Install [ROS2 Humble](https://docs.ros.org/en/humble/Installation.html).
-
-1. ROS2 dependencies:
-
-   ```shell
-   sudo apt-get install python3-colcon-common-extensions
-   sudo apt-get install ros-humble-xacro
-   sudo apt-get install ros-humble-robot-state-publisher
-   sudo apt-get install ros-humble-joint-state-publisher
-   sudo apt-get install ros-humble-joint-state-publisher-gui
-   ```
-
-1. Clone this repo: `git clone --recurse-submodules https://github.com/Mingrui-Yu/retargeting.git`
-
-1. (Only for Leap Hand Hardware) Dependence of Leap Hand hardware: refer to [here](ws_ros2/src/leaphand_ros2_module/readme.md).
-
-1. Build the ROS2 workspace:
-   ```
-   cd ws_ros2
-   colcon build --symlink-install
-   ```
-
-## Usage
-
-### Teleoperation
+The quickest path is the offline replay path. It does not require ROS, cameras, or robot hardware.
 
 ```bash
-# launch the rviz
-cd ws_ros2
-source install/setup.bash
-ros2 launch retargeting_benchmark rviz_vis_paxini.py
-
-# launch the retargeting module
+git clone --recurse-submodules https://github.com/Mingrui-Yu/retargeting.git
 cd retargeting
+
+conda create -n retargeting -c conda-forge python=3.10.12 pinocchio
+conda activate retargeting
+
+pip install -e ".[replay]"
+```
+
+Optional dependency groups are defined in `pyproject.toml`. Install only what you need:
+
+```bash
+pip install -e ".[mujoco]"
+pip install -e ".[vision]"
+pip install -e ".[avp]"
+pip install -e ".[dev]"
+```
+
+`nlopt` is installed as a core dependency because the retargeting optimizer is a primary part of this package. Install the GPU-enabled PyTorch build that matches your CUDA driver and runtime from the [official PyTorch instructions](https://pytorch.org/). PyTorch is required for optimizer paths, but it is not pinned in `pyproject.toml` because the correct wheel depends on your CUDA environment. This codebase has been tested with CUDA 12.8 and PyTorch `2.11.0+cu128`.
+
+ROS/RViz and real robot paths additionally require ROS2 Humble and the ROS packages listed in [ROS And RViz](#ros-and-rviz).
+
+## Quickstart: Offline Replay
+
+Generate a reusable offline retargeting result from the repository root:
+
+```bash
+python -m retargeting.offline_retarget end=200 run_name=quickstart_leap
+```
+
+Visualize the saved result in the `viser` web viewer:
+
+```bash
+python -m retargeting.viser_retargeting_visualize result=outputs/quickstart_leap/retargeting
+```
+
+Compute benchmark statistics and plots from the same result:
+
+```bash
+python -m retargeting.benchmark_trajectory result=outputs/quickstart_leap/retargeting
+```
+
+For quick inspection, the viewer can still retarget directly without saving an intermediate result:
+
+```bash
+python -m retargeting.viser_retargeting_visualize end=200
+```
+
+The default Hydra replay config uses:
+
+- replay data: `tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz`
+- robot config: `configs/robots/panda_leap_paxini.yaml`
+- retargeting config: `configs/retargeting/vector_wrist_joint.yaml`
+
+These paths load a promoted offline replay fixture. They do not start ROS, RViz, cameras, live Vision Pro streaming, or a real robot.
+
+If you only want to verify the package in a headless environment, run:
+
+```bash
+python -m pytest tests
+```
+
+## Configuration
+
+Robot-specific and retargeting-specific values are configured in YAML files instead of being edited directly in Python source.
+
+| Config | Purpose |
+| --- | --- |
+| `configs/offline_retarget.yaml` | Hydra entry config for producing saved retargeting results. |
+| `configs/replay.yaml` | Hydra entry config for offline replay composition. |
+| `configs/benchmark.yaml` | Hydra entry config for benchmark summaries and plots from saved results. |
+| `configs/robots/panda_leap_paxini.yaml` | Panda arm + Leap hand with Paxini fingertips. |
+| `configs/robots/panda_shadow.yaml` | Panda arm + Shadow hand. |
+| `configs/retargeting/vector_wrist_joint.yaml` | Vector wrist joint retargeting settings and link pairs. |
+| `configs/apps/replay_avp.yaml` | Offline replay app defaults. |
+
+Replay uses Hydra config groups. Override groups and values from the command line:
+
+```bash
+python -m retargeting.viser_retargeting_visualize \
+  robots=panda_shadow \
+  data=tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz \
+  viewer.port=8090 \
+  viewer.no_robot_mesh=true
+```
+
+Legacy argparse-style flags remain available for older scripts:
+
+```bash
+python -m retargeting.viser_retargeting_visualize \
+  --robot configs/robots/panda_shadow.yaml \
+  --retarget configs/retargeting/vector_wrist_joint.yaml \
+  --hand-type shadow
+```
+
+When adding a new robot, prefer this route:
+
+1. Add robot assets under `assets/robots/<robot_name>/`.
+2. Add a robot config under `configs/robots/<robot_name>.yaml`.
+3. Put joints, frames, model paths, initial qpos, and hand scale in the config.
+4. Keep retargeting link pairs and objective settings in `configs/retargeting/`.
+
+Avoid hard-coding robot-specific joint names, link names, URDF paths, or initial poses in core Python modules.
+
+## Robot Assets
+
+The current core/offline asset layout is:
+
+```text
+assets/
+├── meshes/
+│   ├── leap_hand/
+│   ├── panda/
+│   └── shadow_hand/
+├── robots/
+│   ├── panda_leap_paxini/
+│   └── panda_shadow/
+└── scenes/
+```
+
+Robot configs should point to stable paths under `assets/robots/`. Shared component meshes live under `assets/meshes/`; robot URDF asset folders use local symlinks such as `panda`, `leap_hand`, and `shadow_hand` so URDF mesh paths stay relative and portable.
+
+For ROS robot description work, Xacro/URDF files are still available under `ws_ros2/src/my_robot_description/`.
+
+## Data And Outputs
+
+The repository includes a promoted replay fixture for tests and quickstart:
+
+```text
+tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz
+```
+
+Large experiment data and full benchmark datasets are not bundled as the default quickstart path. The `data/` directory is treated as a local or historical experiment-data location. See [data/README.md](data/README.md) for the current boundary.
+
+New generated files should go under `outputs/`, for example:
+
+```text
+outputs/teleop/
+outputs/simulation/
+outputs/<run_name>/retargeting/
+outputs/<run_name>/benchmark/
+outputs/<run_name>/plots/
+```
+
+Saved offline retargeting, benchmark, and plot artifacts use this layout:
+
+```text
+outputs/<run_name>/
+  retargeting/
+    result.npz
+    metadata.yaml
+  benchmark/
+    metrics.json
+    summary.csv
+  plots/
+    benchmark_metric_means.png
+    benchmark_metric_means.pdf
+```
+
+`result.npz` stores qpos, human keypoints, wrist poses, robot frame poses, and per-frame optimization errors. `metadata.yaml` stores the replay source, robot config, retargeting config, frame range, and result schema version.
+
+`outputs/` is gitignored.
+
+## ROS And RViz
+
+ROS/RViz is optional and is not required for offline replay.
+
+The ROS path expects Ubuntu 22.04 and ROS2 Humble. When using ROS2 with conda, keep the conda Python version consistent with the system Python used by ROS2.
+
+Install ROS2 Humble by following the [official ROS2 Humble instructions](https://docs.ros.org/en/humble/Installation.html), then install the required ROS packages:
+
+```bash
+sudo apt-get install python3-colcon-common-extensions
+sudo apt-get install ros-humble-xacro
+sudo apt-get install ros-humble-robot-state-publisher
+sudo apt-get install ros-humble-joint-state-publisher
+sudo apt-get install ros-humble-joint-state-publisher-gui
+```
+
+Build the ROS2 workspace:
+
+```bash
+cd ws_ros2
+colcon build --symlink-install
+source install/setup.bash
+```
+
+Example RViz launch:
+
+```bash
+ros2 launch retargeting_benchmark rviz_vis_paxini.py
+```
+
+Python-level ROS integration lives in `src/retargeting_ros/`. Compatibility scripts are still kept under `ws_ros2/src/retargeting_benchmark/src/` so existing launch files and older user commands do not break immediately.
+
+## Live Teleoperation
+
+Live teleoperation is an advanced path. It may require ROS, a camera or Vision Pro live stream, optional visualization dependencies, and robot-specific setup.
+
+The legacy compatibility entrypoint is:
+
+```bash
 source ws_ros2/install/setup.bash
 python ws_ros2/src/retargeting_benchmark/src/main_robot_teleoperation.py
 ```
 
-## Development
+Generated teleoperation recordings now default to `outputs/teleop/`.
 
-If you want to do some customized development, such as adding new robots, please follow these instructions.
+Optional live-input dependencies:
 
-### Robot file
+- RGB hand detection: `pip install -e ".[vision]"`
+- Vision Pro streaming: `pip install -e ".[avp]"`
+- MuJoCo-related paths: `pip install -e ".[mujoco]"`
+- ROS/RViz/hardware: ROS2 Humble workspace and robot drivers
 
-1. Place the robot file (.xacro) in `src/my_robot_descriptioin/urdf/`. (We recommend xacro since it supports convenient combination of arms, hands, and fingertip tactile sensors.)
+## Real Robot Control
 
-1. Convert from .xacro to .urdf:
+Real robot control is lab-specific and is not required for offline replay. Confirm robot safety, ROS networking, drivers, and emergency-stop procedures before running any hardware command.
+
+The original lab setup targeted a Franka Panda arm with a Leap hand. The IP addresses below are historical examples from that environment, not portable defaults.
+
+1. Unlock the Panda arm and activate FCI in the robot desk UI.
+
+2. Launch the Franka driver on the Franka control PC:
 
    ```bash
-   cd ws_ros2
-   source install/setup.bash
-
-   # e.g.
-   xacro src/my_robot_description/urdf/panda_leap_tac3d.xacro > src/my_robot_description/urdf/panda_leap_tac3d.urdf
-   ```
-
-1. (Optional, for mujoco simulation) We use soft link to link [the urdf file generated from xacro in ROS workspace] to [the urdf file used for generating xml in mujoco folder]:
-
-   ```bash
-   cd retarget_benchmark
-   ln -s ws_ros2/src/my_robot_description/urdf/panda_leap_tac3d.urdf  assets/panda_leap_tac3d.urdf
-   ```
-
-1. (Optional, for mujoco simulation) Convert .urdf to .xml and do related modifications:
-
-   ```
-   python ws_ros2/src/retargeting_benchmark/src/main_robot_file_process.py
-   ```
-
-### Visualize robot urdf in Rviz
-
-Write the Rviz launch file according to the following examples:
-
-```shell
-# e.g.,
-ros2 launch my_robot_description vis_panda_leap_tac3d.py
-ros2 launch my_robot_description vis_panda_leap_paxini.py
-```
-
-## Real Robot control
-
-**Notice**: The following hardware setup may only work on the Panda arm + Leap Hand in our lab.
-
-1. unlock robot arm at `192.168.52.3/desk/` and activate FCI;
-
-2. Driver on Franka Control PC:
-
-   ```shell
    ssh robotics@192.168.52.5
-
    cd franka_emika_panda/ws_ros2/
    source install/setup.bash
-
    ros2 launch franka_bringup low_level_joint_impedance_controller.launch.py arm_id:=fer robot_ip:=192.168.52.3
    ```
 
-3. Leap hand bringup:
+3. Launch Leap hand bringup:
 
-   ```
-   conda activate <env>
+   ```bash
+   conda activate retargeting
    ros2 launch leap_hand leap_bringup.py
    ```
 
-4. Real prepare:
+4. Prepare real robot ROS nodes:
 
-   - franka_joint_states_freq_reduce
-   - main_robot_real_high_freq
-
-   ```shell
-   conda activate <env>
+   ```bash
+   conda activate retargeting
    ros2 launch retargeting_benchmark real_prepare.py
    ```
 
-5. Run your teleoperation scripts.
+5. Run the teleoperation entrypoint only after confirming the hardware state and ROS topics.
+
+Leap hand hardware details are in [ws_ros2/src/leaphand_ros2_module/readme.md](ws_ros2/src/leaphand_ros2_module/readme.md).
+
+## Development
+
+Run the headless test suite from the repository root:
+
+```bash
+python -m pytest tests
+```
+
+Check the core and ROS adapter import boundary:
+
+```bash
+python -c "import retargeting; import retargeting_ros"
+```
+
+Check Hydra replay config composition without starting the viewer:
+
+```bash
+python -c "from retargeting.viser_retargeting_visualize import compose_hydra_replay_config; cfg = compose_hydra_replay_config(['robots=panda_shadow','viewer.port=8090']); print(cfg['robot']['name'], cfg['viewer']['port'])"
+```
+
+Check Hydra offline retarget config composition:
+
+```bash
+python -c "from retargeting.offline_retarget import compose_hydra_offline_retarget_config; cfg = compose_hydra_offline_retarget_config(['end=1','run_name=smoke']); print(cfg['data'], cfg['run_name'])"
+```
+
+Default tests should not start ROS, RViz, cameras, Vision Pro live streaming, real robots, Open3D GUI, or MuJoCo viewer.
+
+## Citation
+
+```bibtex
+@article{xin2026analyzing,
+  title={Analyzing Key Objectives in Human-to-Robot Retargeting for Dexterous Manipulation},
+  author={Xin, Chendong and Yu, Mingrui and Jiang, Yongpeng and Zhang, Zhefeng and Li, Xiang},
+  journal={IEEE Robotics and Automation Practice},
+  volume={1},
+  pages={29--34},
+  year={2026},
+  doi={10.1109/RAP.2026.3656110}
+}
+```
+
+## Contact
+
+For questions, contact Mingrui Yu at [mingruiyu98@gmail.com](mailto:mingruiyu98@gmail.com).

@@ -1,0 +1,17 @@
+defaults:
+  - apps: replay_avp
+  - robots: panda_leap_paxini
+  - retargeting: vector_wrist_joint
+  - _self_
+
+data: ${app.data}
+result: ${app.result}
+hand_type: ${robot.hand_type}
+start: ${app.start}
+end: ${app.end}
+stride: ${app.stride}
+viewer:
+  fps: ${app.viewer.fps}
+  port: ${app.viewer.port}
+  no_robot_mesh: ${app.viewer.no_robot_mesh}
+  trail_length: ${app.viewer.trail_length}

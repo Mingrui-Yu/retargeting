@@ -1,0 +1,14 @@
+defaults:
+  - apps: offline_retarget_avp
+  - robots: panda_leap_paxini
+  - retargeting: vector_wrist_joint
+  - _self_
+
+data: ${app.data}
+hand_type: ${robot.hand_type}
+start: ${app.start}
+end: ${app.end}
+stride: ${app.stride}
+output_root: ${app.output_root}
+output_dir: ${app.output_dir}
+run_name: ${app.run_name}

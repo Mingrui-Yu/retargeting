@@ -1,6 +1,6 @@
-import os
 import time
-from typing import List, Optional
+from pathlib import Path
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -18,6 +18,7 @@ from robot_benchmark import RobotBenchmark
 from robot_control import RobotControl
 from robot_mujoco import RobotMujoco
 from robot_pinocchio import RobotPinocchio
+from retargeting.config import default_robot_config_path, load_robot_config
 
 try:
     from single_hand_detector import SingleHandDetector
@@ -27,7 +28,6 @@ except ModuleNotFoundError as e:
 from sklearn.preprocessing import normalize
 from utils.utils_calc import posRotMat2Isometry3d, quatXYZW2WXYZ, sciR, transformPositions
 from utils.utils_mano import MANO_FINGERTIP_INDEX
-from utils.utils_mjcf import find_actuated_joints_name, find_touch_joints_name
 from vision_pro_detector import VisionProDetector
 
 
@@ -46,9 +46,6 @@ class RobotTeleoperation:
         mujoco_vis=False,
         use_real_hardware=False,
     ):
-        # -------- hyper-parameters --------
-        mjcf_file_name = "assets/panda_leap_tac3d_touch_asset.xml"
-
         """
         retarget_type:
             VECTOR_WRIST_JOINT:
@@ -82,9 +79,15 @@ class RobotTeleoperation:
         self.robot_adaptor = robot_adaptor
         self.robot_control = robot_control
 
-        self.robot_benchmark = RobotBenchmark(hand_type=self.hand_type, robot_adaptor=self.robot_adaptor)
+        robot_config = load_robot_config(default_robot_config_path(self.hand_type))
+        self.robot_benchmark = RobotBenchmark(
+            robot_adaptor=self.robot_adaptor,
+            benchmark_config=robot_config.benchmark,
+        )
 
-        self.robot_mujoco = RobotMujoco(mjcf_file_name) if mujoco_vis else None  # only for visualization
+        if mujoco_vis:
+            raise ValueError("MuJoCo visualization requires a configured MJCF asset.")
+        self.robot_mujoco = None
 
         if self.hand_type == "leap":
             if self.ablation_option == 3:
@@ -784,7 +787,7 @@ class RobotTeleoperation:
         # -----------------------------Benchmark---------------------------------
 
         print(f"retarget opt time cost: {(time.perf_counter() - t1):.3f}")
-        optimizaion_time = time.perf_counter() - t1
+        optimization_time = time.perf_counter() - t1
 
         position_err = self.robot_benchmark.position_error(qpos, hand_kps_in_world, 1)
         orientation_err = self.robot_benchmark.orientation_error(qpos, hand_kps_in_world, 1)
@@ -794,7 +797,7 @@ class RobotTeleoperation:
             "position_err": position_err,
             "orientation_err": orientation_err,
             "relative_position_err": relative_position_err,
-            "optimizaion_time": optimizaion_time,
+            "optimization_time": optimization_time,
         }
         # err = orientation_err
 
@@ -810,9 +813,10 @@ class RobotTeleoperation:
 
 
 def main():
-    urdf_file_name = os.readlink("assets/panda_leap_tac3d.urdf")  # no touch bodies/joints/sensors
-    actuated_joints_name = [f"panda_joint{i+1}" for i in range(7)] + [f"joint_{i}" for i in range(16)]
-    touch_joints_name: List[str] = []
+    repo_root = Path(__file__).resolve().parents[5]
+    robot_config = load_robot_config(repo_root / default_robot_config_path("leap"))
+    urdf_file_name = robot_config.robot_file_path
+    actuated_joints_name = list(robot_config.actuated_joints)
 
     robot_model = RobotPinocchio(
         robot_file_path=urdf_file_name,
@@ -821,7 +825,6 @@ def main():
     robot_adaptor = RobotAdaptor(
         robot_model=robot_model,
         actuated_joints_name=actuated_joints_name,
-        touch_joints_name=touch_joints_name,
     )
 
     # teleop = RobotTeleoperation(input_device="rgb", mujoco_vis=True)
@@ -840,7 +843,15 @@ def main():
 
     # ------------------------------------------------------------
 
-    teleop = RobotTeleoperation(robot_adaptor=robot_adaptor, input_device="vision_pro", mujoco_vis=True)
+    teleop = RobotTeleoperation(
+        hand_type=robot_config.hand_type,
+        robot_adaptor=robot_adaptor,
+        robot_control=None,
+        qpos_init=np.asarray(robot_config.initial_qpos, dtype=float),
+        input_device="vision_pro",
+        mujoco_vis=False,
+        use_real_hardware=False,
+    )
     data = np.load("data/test_teleop/vision_pro/data.npy", allow_pickle=True).item()
     stream_data = data["stream"]
 

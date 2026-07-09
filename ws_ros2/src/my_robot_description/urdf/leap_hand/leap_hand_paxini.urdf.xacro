@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-    <xacro:macro name="leap_hand_custom_tac3d" params="mesh_dir">
+    <xacro:macro name="leap_hand_paxini" params="mesh_dir">
 
         <xacro:include
             filename="$(find my_robot_description)/urdf/leap_hand/leap_hand_body.urdf.xacro" />

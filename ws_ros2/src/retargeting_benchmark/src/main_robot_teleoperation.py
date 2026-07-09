@@ -5,11 +5,13 @@ import os
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 from threading import Thread
-from typing import List, Union
+from typing import Union
 
 import numpy as np
 import rclpy
+from _retargeting_compat import ensure_retargeting_package
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from robot_adaptor import RobotAdaptor
@@ -21,6 +23,9 @@ from robot_teleoperation import RobotTeleoperation
 from rviz_visualize import RvizVisualizer
 from utils.utils_keyboard import KeyboardListener
 from vision_pro_detector import VisionProDetector
+
+ensure_retargeting_package()
+from retargeting.config import default_robot_config_path, load_robot_config
 
 
 def flatten_stream_data(data_dict):
@@ -67,40 +72,16 @@ class RobotTeleoperationMain:
     def __init__(self):
         # --------- hyper-parameters ---------
         self.hand_type = "leap"  # "leap" or "shadow"
+        repo_root = Path(__file__).resolve().parents[4]
+        robot_config = load_robot_config(repo_root / default_robot_config_path(self.hand_type))
+        urdf_file_name = robot_config.robot_file_path
+        actuated_joints_name = list(robot_config.actuated_joints)
         if self.hand_type == "leap":
-            urdf_file_name = os.readlink("assets/panda_leap_paxini.urdf")  # no touch bodies/joints/sensors
-            actuated_joints_name = [f"panda_joint{i+1}" for i in range(7)] + [f"joint_{i}" for i in range(16)]
             self.max_joint_speed = [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.5] + [1.0] * 16
         elif self.hand_type == "shadow":
-            urdf_file_name = os.readlink("assets/panda_shadow.urdf")  # no touch bodies/joints/sensors
-            actuated_joints_name = [f"panda_joint{i+1}" for i in range(7)] + [
-                "WRJ2",
-                "WRJ1",
-                "FFJ4",
-                "FFJ3",
-                "FFJ2",
-                "FFJ1",
-                "LFJ5",
-                "LFJ4",
-                "LFJ3",
-                "LFJ2",
-                "LFJ1",
-                "MFJ4",
-                "MFJ3",
-                "MFJ2",
-                "MFJ1",
-                "RFJ4",
-                "RFJ3",
-                "RFJ2",
-                "RFJ1",
-                "THJ5",
-                "THJ4",
-                "THJ3",
-                "THJ2",
-                "THJ1",
-            ]
             self.max_joint_speed = [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.5] + [1.0] * 24
-        touch_joints_name: List[str] = []
+        else:
+            raise ValueError(f"Invalid hand type: {self.hand_type}")
 
         self.vision_pro_ip = "192.168.52.6"
         # self.vision_pro_ip = "192.168.60.250"
@@ -129,7 +110,6 @@ class RobotTeleoperationMain:
         self.robot_adaptor = RobotAdaptor(
             robot_model=self.robot_model,
             actuated_joints_name=actuated_joints_name,
-            touch_joints_name=touch_joints_name,
         )
         self.robot_control = RobotControl(
             self.robot_model,
@@ -148,6 +128,7 @@ class RobotTeleoperationMain:
             input_device=self.input_device,
             mujoco_vis=False,
             use_real_hardware=self.use_hardware,
+            benchmark_config=robot_config.benchmark,
         )
         # self.robot_benchmark = RobotBenchmark(robot_adaptor=self.robot_adaptor)
         if self.input_device == "vision_pro":
@@ -182,7 +163,7 @@ class RobotTeleoperationMain:
     def main(self):
         # ----------- hyper-parameters -----------
         project_dir = "/home/mingrui/mingrui/research/retargeting"
-        save_dir = os.path.join(project_dir, f"data/teleop_process/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}")
+        save_dir = os.path.join(project_dir, f"outputs/teleop/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}")
         os.makedirs(save_dir, exist_ok=True)
         if self.load_offline_data:
             file_name = os.path.join(project_dir, "data/test_teleop/vision_pro/data_2025-01-16_20-27-43.npz")
@@ -260,13 +241,13 @@ class RobotTeleoperationMain:
             orientation_err_list.append(err["orientation_err"])
             relative_position_err_list.append(err["relative_position_err"])
             relative_position_to_wrist_err_list.append(err["relative_position_to_wrist_err"])
-            time_cost_list.append(err["optimizaion_time"])
+            time_cost_list.append(err["optimization_time"])
 
             total_position_err += err["position_err"]
             total_orientation_err += err["orientation_err"]
             total_relative_position_err += err["relative_position_err"]
             total_relative_position_to_wrist_err += err["relative_position_to_wrist_err"]
-            total_time_cost += err["optimizaion_time"]
+            total_time_cost += err["optimization_time"]
 
             # print(f"Frame time cost 3: {(time.time() - t_frame_start):.3f}")
 
@@ -319,7 +300,7 @@ class RobotTeleoperationMain:
             print("average_relative_position_err: ", total_relative_position_err / len(stream_data))
             print("average_relative_position_to_wrist_err: ", total_relative_position_to_wrist_err / len(stream_data))
             print("average_time_cost: ", total_time_cost / len(stream_data))
-            output_file = "data/simulation/shadow/complex_8.npz"
+            output_file = "outputs/simulation/shadow/complex_8.npz"
             os.makedirs(os.path.dirname(output_file), exist_ok=True)
             np.savez(
                 output_file,
