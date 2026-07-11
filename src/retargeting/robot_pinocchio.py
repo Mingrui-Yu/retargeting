@@ -88,8 +88,32 @@ class RobotPinocchio:
         pose = self.data.oMf[self.get_frame_index(frame_name)]
         return pose.homogeneous
 
+    def get_frame_pose_by_id(self, frame_id: int, qpos: Optional[np.ndarray] = None) -> np.ndarray:
+        """
+        Args:
+            frame_id: Pinocchio frame id.
+            qpos: Optional joint position in model DoF order.
+
+        Returns:
+            Current frame pose as a homogeneous matrix.
+        """
+        if qpos is not None:
+            self.compute_forward_kinematics(qpos)
+        return self.data.oMf[frame_id].homogeneous
+
     def get_frame_space_jacobian(self, frame_name: str, qpos: Optional[np.ndarray] = None) -> np.ndarray:
         frame_id = self.get_frame_index(frame_name)
+        return self.get_frame_space_jacobian_by_id(frame_id, qpos=qpos)
+
+    def get_frame_space_jacobian_by_id(self, frame_id: int, qpos: Optional[np.ndarray] = None) -> np.ndarray:
+        """
+        Args:
+            frame_id: Pinocchio frame id.
+            qpos: Optional joint position in model DoF order.
+
+        Returns:
+            Current frame spatial Jacobian in the LOCAL_WORLD_ALIGNED reference frame.
+        """
         reference_frame = pin.LOCAL_WORLD_ALIGNED
         if qpos is not None:
             self.check_joint_dim(qpos)

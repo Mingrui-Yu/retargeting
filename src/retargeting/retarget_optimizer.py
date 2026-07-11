@@ -608,8 +608,8 @@ class VectorWristJointOptimizerV2(RetargetOptimizer):
         Returns:
             Current frame pose as a homogeneous matrix.
         """
-        if self.computed_frame_indices is not None and hasattr(self.robot_model, "data"):
-            return self.robot_model.data.oMf[self.computed_frame_indices[link_idx]].homogeneous
+        if self.computed_frame_indices is not None and hasattr(self.robot_model, "get_frame_pose_by_id"):
+            return self.robot_model.get_frame_pose_by_id(self.computed_frame_indices[link_idx])
         return self.robot_model.get_frame_pose(self.computed_links_name[link_idx])
 
     def _get_frame_jacobian(self, link_idx: int) -> np.ndarray:
@@ -620,22 +620,8 @@ class VectorWristJointOptimizerV2(RetargetOptimizer):
         Returns:
             Current frame spatial Jacobian in robot model DOF order.
         """
-        if (
-            self.computed_frame_indices is not None
-            and hasattr(self.robot_model, "model")
-            and hasattr(self.robot_model, "data")
-        ):
-            try:
-                import pinocchio as pin
-
-                return pin.getFrameJacobian(
-                    self.robot_model.model,
-                    self.robot_model.data,
-                    self.computed_frame_indices[link_idx],
-                    pin.LOCAL_WORLD_ALIGNED,
-                )
-            except ModuleNotFoundError:
-                pass
+        if self.computed_frame_indices is not None and hasattr(self.robot_model, "get_frame_space_jacobian_by_id"):
+            return self.robot_model.get_frame_space_jacobian_by_id(self.computed_frame_indices[link_idx])
         return self.robot_model.get_frame_space_jacobian(self.computed_links_name[link_idx])
 
     def _collect_link_state(
