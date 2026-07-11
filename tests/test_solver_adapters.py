@@ -334,3 +334,70 @@ def test_nlopt_solver_reuses_optimizer_between_objective_updates(monkeypatch):
     assert fake_opt.maxtime == 0.01
     assert fake_opt.objective is objective_two
     assert [call[0] for call in objective_calls] == ["one", "two"]
+
+
+def test_nlopt_solver_non_positive_maxtime_disables_time_limit(monkeypatch):
+    """Verify negative maxtime is mapped to NLopt's disabled time limit.
+
+    Args:
+        monkeypatch: Pytest fixture used to install a fake nlopt module.
+
+    Returns:
+        None.
+    """
+
+    class FakeNloptOpt:
+        """Small fake that records the configured maxtime value."""
+
+        def __init__(self, _algorithm, _opt_dim):
+            """Initialize recorded maxtime.
+
+            Args:
+                _algorithm: Unused nlopt algorithm identifier.
+                _opt_dim: Unused optimization dimension.
+
+            Returns:
+                None.
+            """
+            self.maxtime = None
+
+        def set_maxtime(self, maxtime):
+            """Record maxtime passed by the adapter.
+
+            Args:
+                maxtime: Time budget value passed to nlopt.
+
+            Returns:
+                None.
+            """
+            self.maxtime = maxtime
+
+    fake_opt = FakeNloptOpt(None, None)
+    fake_nlopt = types.SimpleNamespace(LD_SLSQP=7, opt=lambda _algorithm, _opt_dim: fake_opt)
+    monkeypatch.setitem(sys.modules, "nlopt", fake_nlopt)
+
+    from retargeting.optimization.solvers import NloptSlsqpSolver
+
+    solver = NloptSlsqpSolver(2)
+    solver.configure({"maxtime": -1})
+
+    assert fake_opt.maxtime == 0.0
+
+
+def test_scipy_solver_non_positive_maxtime_disables_time_limit():
+    """Verify negative maxtime clears scipy's callback time limit.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    from retargeting.optimization.solvers import ScipySlsqpSolver
+
+    solver = ScipySlsqpSolver(2)
+    solver.configure({"maxtime": 0.01})
+    assert solver._maxtime == 0.01
+
+    solver.configure({"maxtime": -1})
+    assert solver._maxtime is None

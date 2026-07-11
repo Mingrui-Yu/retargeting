@@ -3,4 +3,5 @@ name: scipy_slsqp
 params:
   # SciPy SLSQP `ftol` controls multiple convergence checks, not just objective-value change.
   ftol: 0.00001
-  maxtime: 0.05
+  # Negative or zero disables the per-frame wall-clock time limit.
+  maxtime: -1

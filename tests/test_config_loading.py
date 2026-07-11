@@ -90,12 +90,26 @@ def test_retargeting_config_loads_vector_wrist_joint_targets():
     config = load_retargeting_config("configs/retargeting/vector_wrist_joint.yaml")
 
     assert config.type == "VECTOR_WRIST_JOINT"
-    assert config.optimizer_class == "VectorWristJointOptimizer"
+    assert config.optimizer_class == "VectorWristJointOptimizerV2"
     assert config.optimizer_params["huber_delta"] == 0.02
     assert config.targets_for("leap").wrist_link_name == "wrist"
     assert config.targets_for("shadow").wrist_link_name == "ee_link"
     if config.joint_limit_overrides:
         assert config.joint_limit_overrides[0].indices == (9, 10, 13, 14, 17, 18)
+
+
+def test_retargeting_config_accepts_legacy_vector_wrist_joint_class():
+    from retargeting.config import load_config_data, load_retargeting_config
+    from retargeting.retarget_optimizer import VectorWristJointOptimizer
+    from retargeting.robot_teleoperation import get_optimizer_class
+
+    config_data = load_config_data("configs/retargeting/vector_wrist_joint.yaml")
+    config_data["optimizer"]["class"] = "VectorWristJointOptimizer"
+
+    config = load_retargeting_config(config_data)
+
+    assert config.optimizer_class == "VectorWristJointOptimizer"
+    assert get_optimizer_class(config.optimizer_class) is VectorWristJointOptimizer
 
 
 def test_solver_configs_load_backend_specific_params():
@@ -106,10 +120,10 @@ def test_solver_configs_load_backend_specific_params():
 
     assert nlopt_config.name == "nlopt_slsqp"
     assert nlopt_config.params["ftol_abs"] == 0.00001
-    assert nlopt_config.params["maxtime"] == 0.05
+    assert nlopt_config.params["maxtime"] == -1
     assert scipy_config.name == "scipy_slsqp"
     assert scipy_config.params["ftol"] == 0.00001
-    assert scipy_config.params["maxtime"] == 0.05
+    assert scipy_config.params["maxtime"] == -1
 
 
 def test_offline_retarget_config_accepts_post_action_overrides():

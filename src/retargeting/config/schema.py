@@ -317,7 +317,8 @@ class RetargetingConfig:
             raise ValueError(f"No retarget target config for hand_type: {hand_type}") from exc
 
     def validate(self) -> None:
-        if self.optimizer_class != "VectorWristJointOptimizer":
+        supported_optimizer_classes = {"VectorWristJointOptimizer", "VectorWristJointOptimizerV2"}
+        if self.optimizer_class not in supported_optimizer_classes:
             raise ValueError(f"Unsupported optimizer class in Phase 2: {self.optimizer_class}")
         for required_param in ["huber_delta"]:
             if required_param not in self.optimizer_params:
@@ -377,7 +378,7 @@ def default_solver_config() -> SolverConfig:
     Returns:
         Default NLopt SLSQP solver config.
     """
-    return SolverConfig(name="nlopt_slsqp", params={"ftol_abs": 1e-5, "maxtime": 0.05})
+    return SolverConfig(name="nlopt_slsqp", params={"ftol_abs": 1e-5, "maxtime": -1.0})
 
 
 @dataclass(frozen=True)

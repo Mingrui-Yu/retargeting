@@ -7,6 +7,7 @@ import numpy as np
 from retargeting.config import SolverConfig, default_solver_config
 from retargeting.retarget_optimizer import (
     VectorWristJointOptimizer,
+    VectorWristJointOptimizerV2,
 )
 from retargeting.robot_adaptor import RobotAdaptor
 from retargeting.robot_benchmark import RobotBenchmark
@@ -38,6 +39,26 @@ def merge_objective_solver_params(objective_params: dict, solver_config: SolverC
     params["solver"] = solver_config.name
     params["solver_params"] = dict(solver_config.params)
     return params
+
+
+OPTIMIZER_CLASSES = {
+    "VectorWristJointOptimizer": VectorWristJointOptimizer,
+    "VectorWristJointOptimizerV2": VectorWristJointOptimizerV2,
+}
+
+
+def get_optimizer_class(class_name: str):
+    """
+    Args:
+        class_name: Optimizer class name from retargeting config.
+
+    Returns:
+        Optimizer class object used to construct the retargeting objective.
+    """
+    try:
+        return OPTIMIZER_CLASSES[class_name]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported optimizer class: {class_name}") from exc
 
 
 class RobotTeleoperation:
@@ -117,6 +138,7 @@ class RobotTeleoperation:
             raise ValueError("MuJoCo visualization requires a configured MJCF asset.")
 
         if retargeting_config is not None:
+            optimizer_class = get_optimizer_class(retargeting_config.optimizer_class)
             target_config = retargeting_config.targets_for(self.hand_type)
             target_link_pairs = target_config.link_pairs
             targets = {
@@ -133,7 +155,7 @@ class RobotTeleoperation:
                 }
                 for override in retargeting_config.joint_limit_overrides
             ]
-            self.optimizer = VectorWristJointOptimizer(
+            self.optimizer = optimizer_class(
                 robot_adaptor=self.robot_adaptor,
                 targets=targets,
                 params=params,

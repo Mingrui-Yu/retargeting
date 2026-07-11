@@ -3,7 +3,7 @@ type: VECTOR_WRIST_JOINT
 setting_id: 3
 ablation_option: 0
 optimizer:
-  class: VectorWristJointOptimizer
+  class: VectorWristJointOptimizerV2
   params:
     huber_delta: 0.02
 targets:

@@ -209,6 +209,7 @@ class NloptSlsqpSolver(_BaseCallbackSolver):
 
         Args:
             params: Solver params. Supported keys include `ftol_abs` and `maxtime`.
+                Non-positive `maxtime` disables the wall-clock time limit.
 
         Returns:
             None.
@@ -216,7 +217,8 @@ class NloptSlsqpSolver(_BaseCallbackSolver):
         if "ftol_abs" in params:
             self._opt.set_ftol_abs(float(params["ftol_abs"]))
         if "maxtime" in params:
-            self._opt.set_maxtime(float(params["maxtime"]))
+            maxtime = float(params["maxtime"])
+            self._opt.set_maxtime(maxtime if maxtime > 0.0 else 0.0)
 
     def set_lower_bounds(self, lower_bounds: list[float]) -> None:
         """Set lower bounds on both the adapter state and the persistent nlopt optimizer.
@@ -360,6 +362,7 @@ class ScipySlsqpSolver(_BaseCallbackSolver):
 
         Args:
             params: Solver params. Supported keys include `ftol`, `maxtime`, and `maxiter`.
+                Non-positive `maxtime` disables the callback time limit.
 
         Returns:
             None.
@@ -369,7 +372,8 @@ class ScipySlsqpSolver(_BaseCallbackSolver):
         if "maxiter" in params:
             self._options["maxiter"] = int(params["maxiter"])
         if "maxtime" in params:
-            self._maxtime = float(params["maxtime"])
+            maxtime = float(params["maxtime"])
+            self._maxtime = maxtime if maxtime > 0.0 else None
 
     def set_lower_bounds(self, lower_bounds: list[float]) -> None:
         """Set lower bounds and invalidate cached scipy bounds.
