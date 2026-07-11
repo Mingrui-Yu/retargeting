@@ -2,6 +2,7 @@ defaults:
   - apps: replay_avp
   - robots: panda_leap_paxini
   - retargeting: vector_wrist_joint
+  - solvers: nlopt_slsqp
   - _self_
 
 data: ${app.data}

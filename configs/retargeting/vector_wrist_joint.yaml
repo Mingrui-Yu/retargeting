@@ -6,8 +6,6 @@ optimizer:
   class: VectorWristJointOptimizer
   params:
     huber_delta: 0.02
-    opt_ftol_abs: 0.00001
-    opt_maxtime: 0.05
 targets:
   leap:
     wrist_link_name: wrist
@@ -42,6 +40,6 @@ targets:
       - [mfdistal, mftip]
       - [rfdistal, rftip]
       - [lfdistal, lftip]
-joint_limit_overrides:
-  - indices: [9, 10, 13, 14, 17, 18]
-    lower: -0.2
+# joint_limit_overrides:
+  # - indices: [9, 10, 13, 14, 17, 18]
+  #   lower: -0.2

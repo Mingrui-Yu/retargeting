@@ -71,6 +71,13 @@ Generate a reusable offline retargeting result from the repository root:
 python -m retargeting.offline_retarget end=200 run_name=quickstart_leap
 ```
 
+The same command can optionally run follow-up steps immediately after saving the result:
+
+```bash
+python -m retargeting.offline_retarget end=200 run_name=quickstart_leap post.benchmark.enabled=true
+python -m retargeting.offline_retarget end=200 run_name=quickstart_leap post.visualize.enabled=true
+```
+
 Visualize the saved result in the `viser` web viewer:
 
 ```bash
@@ -115,6 +122,8 @@ Robot-specific and retargeting-specific values are configured in YAML files inst
 | `configs/robots/panda_leap_paxini.yaml` | Panda arm + Leap hand with Paxini fingertips. |
 | `configs/robots/panda_shadow.yaml` | Panda arm + Shadow hand. |
 | `configs/retargeting/vector_wrist_joint.yaml` | Vector wrist joint retargeting settings and link pairs. |
+| `configs/solvers/nlopt_slsqp.yaml` | NLopt SLSQP backend and stopping/runtime parameters. |
+| `configs/solvers/scipy_slsqp.yaml` | SciPy SLSQP backend and stopping/runtime parameters. |
 | `configs/apps/replay_avp.yaml` | Offline replay app defaults. |
 
 Replay uses Hydra config groups. Override groups and values from the command line:
@@ -122,6 +131,7 @@ Replay uses Hydra config groups. Override groups and values from the command lin
 ```bash
 python -m retargeting.viser_retargeting_visualize \
   robots=panda_shadow \
+  solvers=scipy_slsqp \
   data=tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz \
   viewer.port=8090 \
   viewer.no_robot_mesh=true
@@ -308,7 +318,7 @@ python -c "import retargeting; import retargeting_ros"
 Check Hydra replay config composition without starting the viewer:
 
 ```bash
-python -c "from retargeting.viser_retargeting_visualize import compose_hydra_replay_config; cfg = compose_hydra_replay_config(['robots=panda_shadow','viewer.port=8090']); print(cfg['robot']['name'], cfg['viewer']['port'])"
+python -c "from retargeting.viser_retargeting_visualize import compose_hydra_replay_config; cfg = compose_hydra_replay_config(['robots=panda_shadow','solvers=scipy_slsqp','viewer.port=8090']); print(cfg['robot']['name'], cfg['solver']['name'], cfg['viewer']['port'])"
 ```
 
 Check Hydra offline retarget config composition:

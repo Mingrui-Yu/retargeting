@@ -7,9 +7,12 @@ from retargeting.config import (
     RobotBenchmarkConfig,
     RetargetingConfig,
     RobotConfig,
+    SolverConfig,
     default_robot_config_path,
+    default_solver_config,
     load_retargeting_config,
     load_robot_config,
+    load_solver_config,
     to_plain_config_data,
 )
 from retargeting.offline_replay import OfflineReplay, iter_frame_indices, load_offline_replay
@@ -216,7 +219,11 @@ def get_initial_alignment_poses(
     return init_robot_wrist_pose, init_avp_wrist_pose
 
 
-def create_retargeter(context: RobotReplayContext, retargeting_config: Optional[RetargetingConfig] = None):
+def create_retargeter(
+    context: RobotReplayContext,
+    retargeting_config: Optional[RetargetingConfig] = None,
+    solver_config: SolverConfig | None = None,
+):
     from retargeting.robot_teleoperation import RobotTeleoperation
 
     return RobotTeleoperation(
@@ -228,6 +235,7 @@ def create_retargeter(context: RobotReplayContext, retargeting_config: Optional[
         mujoco_vis=False,
         use_real_hardware=False,
         retargeting_config=retargeting_config,
+        solver_config=solver_config,
         human_hand_scale=context.human_hand_scale,
         benchmark_config=context.benchmark_config,
     )
@@ -313,8 +321,10 @@ def run_offline_retargeting(
     stride: int = 1,
     robot_config: RobotConfig | None = None,
     retargeting_config: RetargetingConfig | None = None,
+    solver_config: SolverConfig | None = None,
     robot_config_path: str | Path | None = None,
     retargeting_config_path: str | Path | None = None,
+    solver_config_path: str | Path | None = None,
 ) -> tuple[RobotReplayContext, RetargetingTrajectory, RetargetingRunMetadata]:
     """Run offline retargeting and return a persistent trajectory artifact in memory.
 
@@ -326,8 +336,10 @@ def run_offline_retargeting(
         stride: Frame stride.
         robot_config: Optional already-loaded robot config.
         retargeting_config: Optional already-loaded retargeting config.
+        solver_config: Optional already-loaded solver config.
         robot_config_path: Optional robot config path.
         retargeting_config_path: Optional retargeting config path.
+        solver_config_path: Optional solver config path.
 
     Returns:
         Tuple of replay context, trajectory arrays, and run metadata.
@@ -347,11 +359,13 @@ def run_offline_retargeting(
         retargeting_config = (
             load_retargeting_config(retargeting_config_path) if retargeting_config_path is not None else None
         )
+    if solver_config is None:
+        solver_config = load_solver_config(solver_config_path) if solver_config_path is not None else default_solver_config()
 
     context = create_robot_replay_context_from_config(robot_config)
     init_robot_wrist_pose, init_avp_wrist_pose = get_initial_alignment_poses(replay, context, frame_indices[0])
 
-    retargeter = create_retargeter(context, retargeting_config=retargeting_config)
+    retargeter = create_retargeter(context, retargeting_config=retargeting_config, solver_config=solver_config)
     retargeter.set_robot_init_wrist_pose(init_robot_wrist_pose)
     retargeter.set_avp_init_wrist_pose(init_avp_wrist_pose)
 

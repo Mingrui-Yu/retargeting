@@ -10,6 +10,7 @@ from retargeting.config import (
     load_replay_app_config,
     load_retargeting_config,
     load_robot_config,
+    load_solver_config,
     resolve_project_path,
     to_plain_config_data,
 )
@@ -191,10 +192,12 @@ def resolve_replay_options(args):
     retargeting_config_path = (
         args.retarget if args.retarget is not None else (app_config.retargeting if app_config is not None else None)
     )
+    solver_config_path = app_config.solver if app_config is not None else None
     robot_config = load_robot_config(robot_config_path) if robot_config_path is not None else None
     retargeting_config = (
         load_retargeting_config(retargeting_config_path) if retargeting_config_path is not None else None
     )
+    solver_config = load_solver_config(solver_config_path)
 
     hand_type = args.hand_type
     if hand_type is None and robot_config is not None:
@@ -219,6 +222,7 @@ def resolve_replay_options(args):
         else (viewer_config.trail_length if viewer_config is not None else 120),
         "robot_config": robot_config,
         "retargeting_config": retargeting_config,
+        "solver_config": solver_config,
     }
 
 
@@ -263,8 +267,10 @@ def resolve_replay_options_from_config(config: Any) -> dict[str, Any]:
 
     robot_source = config_data.get("robot", app_data.get("robot"))
     retargeting_source = config_data.get("retargeting", app_data.get("retargeting"))
+    solver_source = config_data.get("solver", app_data.get("solver"))
     robot_config = load_robot_config(robot_source) if robot_source is not None else None
     retargeting_config = load_retargeting_config(retargeting_source) if retargeting_source is not None else None
+    solver_config = load_solver_config(solver_source)
 
     hand_type = config_data.get("hand_type")
     if hand_type is None and robot_config is not None:
@@ -285,6 +291,7 @@ def resolve_replay_options_from_config(config: Any) -> dict[str, Any]:
         "trail_length": int(viewer_data.get("trail_length", 120)),
         "robot_config": robot_config,
         "retargeting_config": retargeting_config,
+        "solver_config": solver_config,
     }
 
 
@@ -330,6 +337,7 @@ def run_replay_viewer(options: dict[str, Any]) -> None:
             stride=options["stride"],
             robot_config=options["robot_config"],
             retargeting_config=options["retargeting_config"],
+            solver_config=options["solver_config"],
         )
 
     server = viser.ViserServer(port=options["port"])

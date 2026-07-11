@@ -1,0 +1,6 @@
+# @package solver
+name: scipy_slsqp
+params:
+  # SciPy SLSQP `ftol` controls multiple convergence checks, not just objective-value change.
+  ftol: 0.00001
+  maxtime: 0.05

@@ -8,6 +8,7 @@ from typing import Any
 from retargeting.config import (
     load_retargeting_config,
     load_robot_config,
+    load_solver_config,
     resolve_project_path,
     to_plain_config_data,
 )
@@ -73,6 +74,158 @@ def resolve_output_dir(config_data: dict[str, Any], robot_name: str, retargeting
     return output_root / str(run_name) / "retargeting"
 
 
+def _post_action_enabled(config_data: dict[str, Any], action_name: str) -> bool:
+    """Return whether one offline retarget post action is enabled.
+
+    Args:
+        config_data: Plain composed offline retarget config.
+        action_name: Post action key under `post`, such as `benchmark` or `visualize`.
+
+    Returns:
+        True when the action has `enabled: true`.
+    """
+    post_data = config_data.get("post", {})
+    action_data = post_data.get(action_name, {}) if isinstance(post_data, dict) else {}
+    return bool(action_data.get("enabled", False)) if isinstance(action_data, dict) else False
+
+
+def build_post_benchmark_config(config_data: dict[str, Any], output_dir: Path) -> dict[str, Any]:
+    """Build the benchmark config used after offline retargeting.
+
+    Args:
+        config_data: Plain composed offline retarget config.
+        output_dir: Directory containing the just-saved retargeting artifact.
+
+    Returns:
+        Plain benchmark config consumed by `run_benchmark_from_config`.
+    """
+    post_data = config_data.get("post", {})
+    benchmark_data = post_data.get("benchmark", {}) if isinstance(post_data, dict) else {}
+    if not isinstance(benchmark_data, dict):
+        benchmark_data = {}
+    output_root = benchmark_data.get("output_root", config_data.get("output_root", "outputs"))
+    return {
+        "result": str(output_dir),
+        "output_root": output_root,
+        "output_dir": benchmark_data.get("output_dir"),
+        "plot": bool(benchmark_data.get("plot", True)),
+        "plot_root": benchmark_data.get("plot_root", output_root),
+        "plot_dir": benchmark_data.get("plot_dir"),
+    }
+
+
+def build_post_visualize_config(
+    config_data: dict[str, Any],
+    output_dir: Path,
+    robot_source: Any,
+    retargeting_source: Any,
+    solver_source: Any,
+) -> dict[str, Any]:
+    """Build the replay viewer config used after offline retargeting.
+
+    Args:
+        config_data: Plain composed offline retarget config.
+        output_dir: Directory containing the just-saved retargeting artifact.
+        robot_source: Robot config source already used for retargeting.
+        retargeting_source: Retargeting config source already used for retargeting.
+        solver_source: Solver config source already used for retargeting.
+
+    Returns:
+        Plain replay config consumed by `resolve_replay_options_from_config`.
+    """
+    post_data = config_data.get("post", {})
+    visualize_data = post_data.get("visualize", {}) if isinstance(post_data, dict) else {}
+    if not isinstance(visualize_data, dict):
+        visualize_data = {}
+    viewer_data = visualize_data.get("viewer", {})
+    if not isinstance(viewer_data, dict):
+        viewer_data = {}
+    return {
+        "result": str(output_dir),
+        "data": config_data.get("data"),
+        "hand_type": config_data.get("hand_type"),
+        "start": int(config_data.get("start", 0)),
+        "end": int(config_data.get("end", -1)),
+        "stride": int(config_data.get("stride", 1)),
+        "robot": robot_source,
+        "retargeting": retargeting_source,
+        "solver": solver_source,
+        "viewer": {
+            "fps": float(viewer_data.get("fps", 20.0)),
+            "port": int(viewer_data.get("port", 9217)),
+            "no_robot_mesh": bool(viewer_data.get("no_robot_mesh", False)),
+            "trail_length": int(viewer_data.get("trail_length", 120)),
+        },
+    }
+
+
+def run_benchmark_post_action(config: dict[str, Any]) -> tuple[Path, Path | None]:
+    """Run the benchmark post action.
+
+    Args:
+        config: Plain benchmark config with `result` pointing at a saved artifact.
+
+    Returns:
+        Tuple of benchmark output directory and optional plot output directory.
+    """
+    from retargeting.benchmark_trajectory import run_benchmark_from_config
+
+    return run_benchmark_from_config(config)
+
+
+def run_visualize_post_action(config: dict[str, Any]) -> None:
+    """Run the replay viewer post action.
+
+    Args:
+        config: Plain replay config with `result` pointing at a saved artifact.
+
+    Returns:
+        None. The viewer runs until interrupted.
+    """
+    from retargeting.viser_retargeting_visualize import resolve_replay_options_from_config, run_replay_viewer
+
+    run_replay_viewer(resolve_replay_options_from_config(config))
+
+
+def run_post_retarget_actions(
+    config_data: dict[str, Any],
+    output_dir: Path,
+    robot_source: Any,
+    retargeting_source: Any,
+    solver_source: Any | None = None,
+) -> list[str]:
+    """Run enabled offline retarget post actions.
+
+    Args:
+        config_data: Plain composed offline retarget config.
+        output_dir: Directory containing the just-saved retargeting artifact.
+        robot_source: Robot config source already used for retargeting.
+        retargeting_source: Retargeting config source already used for retargeting.
+        solver_source: Solver config source already used for retargeting.
+
+    Returns:
+        Names of post actions that were started.
+    """
+    completed_actions: list[str] = []
+    if _post_action_enabled(config_data, "benchmark"):
+        benchmark_output_dir, plot_output_dir = run_benchmark_post_action(
+            build_post_benchmark_config(config_data, output_dir)
+        )
+        print(f"Saved benchmark summary to {benchmark_output_dir}")
+        if plot_output_dir is not None:
+            print(f"Saved benchmark plots to {plot_output_dir}")
+        completed_actions.append("benchmark")
+
+    if _post_action_enabled(config_data, "visualize"):
+        print(f"Starting replay viewer for {output_dir}")
+        run_visualize_post_action(
+            build_post_visualize_config(config_data, output_dir, robot_source, retargeting_source, solver_source)
+        )
+        completed_actions.append("visualize")
+
+    return completed_actions
+
+
 def run_offline_retarget_from_config(config: Any, argv: list[str] | None = None) -> Path:
     """Run offline retargeting from a composed config and save the artifact.
 
@@ -90,8 +243,10 @@ def run_offline_retarget_from_config(config: Any, argv: list[str] | None = None)
     app_data = config_data.get("app", {})
     robot_source = config_data.get("robot", app_data.get("robot"))
     retargeting_source = config_data.get("retargeting", app_data.get("retargeting"))
+    solver_source = config_data.get("solver", app_data.get("solver"))
     robot_config = load_robot_config(robot_source)
     retargeting_config = load_retargeting_config(retargeting_source)
+    solver_config = load_solver_config(solver_source)
 
     data_file = str(config_data.get("data", app_data.get("data")))
     start = int(config_data.get("start", app_data.get("start", 0)))
@@ -106,10 +261,13 @@ def run_offline_retarget_from_config(config: Any, argv: list[str] | None = None)
         stride=stride,
         robot_config=robot_config,
         retargeting_config=retargeting_config,
+        solver_config=solver_config,
     )
     metadata.command = ["python", "-m", "retargeting.offline_retarget", *(argv or [])]
     output_dir = resolve_output_dir(config_data, robot_config.name, retargeting_config.type)
-    return save_retargeting_trajectory(output_dir, trajectory, metadata)
+    output_dir = save_retargeting_trajectory(output_dir, trajectory, metadata)
+    run_post_retarget_actions(config_data, output_dir, robot_source, retargeting_source, solver_source)
+    return output_dir
 
 
 def main(argv: list[str] | None = None) -> None:

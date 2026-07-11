@@ -4,12 +4,9 @@ import time
 from typing import Any, List, Optional
 
 import numpy as np
+from retargeting.config import SolverConfig, default_solver_config
 from retargeting.retarget_optimizer import (
-    DexPilotOptimizer,
-    PositionOptimizer,
-    VectorOptimizer,
     VectorWristJointOptimizer,
-    VectorWristOptimizer,
 )
 from retargeting.robot_adaptor import RobotAdaptor
 from retargeting.robot_benchmark import RobotBenchmark
@@ -28,6 +25,21 @@ def sigmoid(x, c=0, w=1):
     return 1 / (1 + np.exp(w * (x - c)))
 
 
+def merge_objective_solver_params(objective_params: dict, solver_config: SolverConfig) -> dict:
+    """
+    Args:
+        objective_params: Objective-specific retargeting parameters.
+        solver_config: Solver backend selection and backend-specific parameters.
+
+    Returns:
+        Runtime optimizer parameter mapping consumed by current optimizer classes.
+    """
+    params = dict(objective_params)
+    params["solver"] = solver_config.name
+    params["solver_params"] = dict(solver_config.params)
+    return params
+
+
 class RobotTeleoperation:
     def __init__(
         self,
@@ -39,6 +51,7 @@ class RobotTeleoperation:
         mujoco_vis=False,
         use_real_hardware=False,
         retargeting_config=None,
+        solver_config: SolverConfig | None = None,
         human_hand_scale: Optional[float] = None,
         benchmark_config=None,
     ):
@@ -70,6 +83,7 @@ class RobotTeleoperation:
 
         self.hand_type = hand_type
         self.use_real_hardware = use_real_hardware
+        self.solver_config = default_solver_config() if solver_config is None else solver_config
 
         if self.ablation_option == 5 or self.ablation_option == 6 or self.ablation_option == 8:
             self.retarget_wrist_method = "separate"
@@ -110,7 +124,7 @@ class RobotTeleoperation:
                 "task_links_name": [pair[1] for pair in target_link_pairs],
                 "wrist_link_name": target_config.wrist_link_name,
             }
-            params = retargeting_config.optimizer_params
+            params = merge_objective_solver_params(retargeting_config.optimizer_params, self.solver_config)
             joint_limit_overrides = [
                 {
                     "indices": list(override.indices),
@@ -124,6 +138,7 @@ class RobotTeleoperation:
                 targets=targets,
                 params=params,
                 joint_limit_overrides=joint_limit_overrides,
+                solver=self.solver_config.name,
             )
             self.arm_optimizer = None
 
@@ -170,7 +185,7 @@ class RobotTeleoperation:
                 "task_links_name": [pair[1] for pair in target_link_pairs],
                 "wrist_link_name": "wrist",
             }
-            params = {"huber_delta": 0.02, "opt_ftol_abs": 1e-5, "opt_maxtime": 0.05}
+            params = merge_objective_solver_params({"huber_delta": 0.02}, self.solver_config)
 
             self.optimizer = VectorWristJointOptimizer(
                 robot_adaptor=self.robot_adaptor,
@@ -244,7 +259,7 @@ class RobotTeleoperation:
                 "task_links_name": [pair[1] for pair in target_link_pairs],
                 "wrist_link_name": "ee_link",
             }
-            params = {"huber_delta": 0.02, "opt_ftol_abs": 1e-5, "opt_maxtime": 0.05}
+            params = merge_objective_solver_params({"huber_delta": 0.02}, self.solver_config)
 
             self.optimizer = VectorWristJointOptimizer(
                 robot_adaptor=self.robot_adaptor,

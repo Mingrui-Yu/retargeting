@@ -170,12 +170,13 @@ def test_vector_wrist_joint_optimizer_single_frame_smoke():
     pytest.importorskip("torch")
 
     from retargeting.retarget_optimizer import VectorWristJointOptimizer
-    from retargeting.config import load_retargeting_config, load_robot_config
+    from retargeting.config import load_retargeting_config, load_robot_config, load_solver_config
     from retargeting.robot_adaptor import RobotAdaptor
     from retargeting.robot_pinocchio import RobotPinocchio
 
     robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
     retargeting_config = load_retargeting_config("configs/retargeting/vector_wrist_joint.yaml")
+    solver_config = load_solver_config("configs/solvers/nlopt_slsqp.yaml")
     robot_model = RobotPinocchio(robot_config.robot_file_path, robot_config.model.type)
     adaptor = RobotAdaptor(
         robot_model,
@@ -191,7 +192,7 @@ def test_vector_wrist_joint_optimizer_single_frame_smoke():
             "task_links_name": [pair[1] for pair in target_link_pairs],
             "wrist_link_name": target_config.wrist_link_name,
         },
-        params={**retargeting_config.optimizer_params, "opt_maxtime": 0.01},
+        params={**retargeting_config.optimizer_params, "solver_params": {**solver_config.params, "maxtime": 0.01}},
         joint_limit_overrides=[
             {
                 "indices": list(override.indices),
@@ -200,6 +201,69 @@ def test_vector_wrist_joint_optimizer_single_frame_smoke():
             }
             for override in retargeting_config.joint_limit_overrides
         ],
+    )
+
+    qpos_init = _load_fixture()["retarget_qpos"][0].copy()
+    ref_values = {
+        "links_vec": np.zeros((len(target_link_pairs), 3)),
+        "wrist_quat": np.array([1.0, 0.0, 0.0, 0.0]),
+        "qpos_doa": qpos_init.copy(),
+        "qpos_doa_last": qpos_init.copy(),
+        "weights": {
+            "links_vec": np.ones(len(target_link_pairs)),
+            "wrist_rot": 0.0,
+            "joint_pos": np.zeros(adaptor.doa),
+            "joint_vel": np.zeros(adaptor.doa),
+        },
+    }
+
+    qpos = optimizer.retarget(ref_values)
+
+    assert qpos.shape == (adaptor.doa,)
+    assert np.isfinite(qpos).all()
+
+
+def test_vector_wrist_joint_optimizer_scipy_slsqp_single_frame_smoke():
+    # The scipy backend should run through the same retarget() API while using
+    # scipy's SLSQP adapter instead of nlopt.
+    np = _np()
+    pytest.importorskip("pinocchio")
+    pytest.importorskip("scipy")
+    pytest.importorskip("torch")
+
+    from retargeting.config import load_retargeting_config, load_robot_config, load_solver_config
+    from retargeting.retarget_optimizer import VectorWristJointOptimizer
+    from retargeting.robot_adaptor import RobotAdaptor
+    from retargeting.robot_pinocchio import RobotPinocchio
+
+    robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
+    retargeting_config = load_retargeting_config("configs/retargeting/vector_wrist_joint.yaml")
+    solver_config = load_solver_config("configs/solvers/scipy_slsqp.yaml")
+    robot_model = RobotPinocchio(robot_config.robot_file_path, robot_config.model.type)
+    adaptor = RobotAdaptor(
+        robot_model,
+        actuated_joints_name=list(robot_config.actuated_joints),
+    )
+
+    target_config = retargeting_config.targets_for(robot_config.hand_type)
+    target_link_pairs = target_config.link_pairs
+    optimizer = VectorWristJointOptimizer(
+        robot_adaptor=adaptor,
+        targets={
+            "origin_links_name": [pair[0] for pair in target_link_pairs],
+            "task_links_name": [pair[1] for pair in target_link_pairs],
+            "wrist_link_name": target_config.wrist_link_name,
+        },
+        params={**retargeting_config.optimizer_params, "solver_params": {**solver_config.params, "maxtime": 0.01}},
+        joint_limit_overrides=[
+            {
+                "indices": list(override.indices),
+                "lower": override.lower,
+                "upper": override.upper,
+            }
+            for override in retargeting_config.joint_limit_overrides
+        ],
+        solver="scipy_slsqp",
     )
 
     qpos_init = _load_fixture()["retarget_qpos"][0].copy()

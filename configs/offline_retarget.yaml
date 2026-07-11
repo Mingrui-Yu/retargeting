@@ -2,6 +2,7 @@ defaults:
   - apps: offline_retarget_avp
   - robots: panda_leap_paxini
   - retargeting: vector_wrist_joint
+  - solvers: nlopt_slsqp
   - _self_
 
 data: ${app.data}
@@ -12,3 +13,19 @@ stride: ${app.stride}
 output_root: ${app.output_root}
 output_dir: ${app.output_dir}
 run_name: ${app.run_name}
+
+post:
+  benchmark:
+    enabled: false
+    output_root: ${output_root}
+    output_dir: null
+    plot: true
+    plot_root: ${output_root}
+    plot_dir: null
+  visualize:
+    enabled: false
+    viewer:
+      fps: 20.0
+      port: 9217
+      no_robot_mesh: false
+      trail_length: 120

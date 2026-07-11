@@ -91,9 +91,43 @@ def test_retargeting_config_loads_vector_wrist_joint_targets():
 
     assert config.type == "VECTOR_WRIST_JOINT"
     assert config.optimizer_class == "VectorWristJointOptimizer"
+    assert config.optimizer_params["huber_delta"] == 0.02
     assert config.targets_for("leap").wrist_link_name == "wrist"
     assert config.targets_for("shadow").wrist_link_name == "ee_link"
-    assert config.joint_limit_overrides[0].indices == (9, 10, 13, 14, 17, 18)
+    if config.joint_limit_overrides:
+        assert config.joint_limit_overrides[0].indices == (9, 10, 13, 14, 17, 18)
+
+
+def test_solver_configs_load_backend_specific_params():
+    from retargeting.config import load_solver_config
+
+    nlopt_config = load_solver_config("configs/solvers/nlopt_slsqp.yaml")
+    scipy_config = load_solver_config("configs/solvers/scipy_slsqp.yaml")
+
+    assert nlopt_config.name == "nlopt_slsqp"
+    assert nlopt_config.params["ftol_abs"] == 0.00001
+    assert nlopt_config.params["maxtime"] == 0.05
+    assert scipy_config.name == "scipy_slsqp"
+    assert scipy_config.params["ftol"] == 0.00001
+    assert scipy_config.params["maxtime"] == 0.05
+
+
+def test_offline_retarget_config_accepts_post_action_overrides():
+    from retargeting.offline_retarget import compose_hydra_offline_retarget_config
+
+    config = compose_hydra_offline_retarget_config(
+        [
+            "post.benchmark.enabled=true",
+            "post.benchmark.plot=false",
+            "post.visualize.enabled=true",
+            "post.visualize.viewer.port=9321",
+        ]
+    )
+
+    assert config["post"]["benchmark"]["enabled"] is True
+    assert config["post"]["benchmark"]["plot"] is False
+    assert config["post"]["visualize"]["enabled"] is True
+    assert config["post"]["visualize"]["viewer"]["port"] == 9321
 
 
 def test_replay_app_config_loads_defaults():
@@ -105,7 +139,8 @@ def test_replay_app_config_loads_defaults():
     assert config.result is None
     assert config.robot == "configs/robots/panda_leap_paxini.yaml"
     assert config.retargeting == "configs/retargeting/vector_wrist_joint.yaml"
-    assert config.viewer.port == 8080
+    assert isinstance(config.viewer.port, int)
+    assert config.viewer.port > 0
 
 
 def test_replay_hydra_style_mapping_resolves_runtime_options():

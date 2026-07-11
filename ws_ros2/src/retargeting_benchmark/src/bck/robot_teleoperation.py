@@ -8,10 +8,7 @@ import rclpy
 import tf2_ros
 from retarget_optimizer import (
     DexPilotOptimizer,
-    PositionOptimizer,
-    VectorOptimizer,
     VectorWristJointOptimizer,
-    VectorWristOptimizer,
 )
 from robot_adaptor import RobotAdaptor
 from robot_benchmark import RobotBenchmark
@@ -141,83 +138,8 @@ class RobotTeleoperation:
             )
 
         elif self.hand_type == "shadow":
-            if self.retarget_type == "POSITION":
-                self.optimizer = PositionOptimizer(
-                    robot_adaptor=self.robot_adaptor,
-                    targets={
-                        "target_links_name": [
-                            "ee_link",
-                            "thtip",
-                            "fftip",
-                            "mftip",
-                            "rftip",
-                            "lftip",
-                            # "thmiddle",
-                            # "ffmiddle",
-                            # "mfmiddle",
-                            # "rfmiddle",
-                            # "lfmiddle",
-                        ],
-                        "wrist_name": "ee_link",
-                    },
-                    params={"huber_delta": 0.02, "opt_ftol_abs": 1e-5, "opt_maxtime": 0.03},
-                )
-            elif self.retarget_type == "VECTOR":
-                self.optimizer = VectorOptimizer(
-                    robot_adaptor=self.robot_adaptor,
-                    targets={
-                        "origin_links_name": [
-                            "world",
-                            "ee_link",
-                            "ee_link",
-                            "ee_link",
-                            "ee_link",
-                            "ee_link",
-                        ],
-                        "task_links_name": [
-                            "ee_link",
-                            "thtip",
-                            "fftip",
-                            "mftip",
-                            "rftip",
-                            "lftip",
-                        ],
-                    },
-                    params={"huber_delta": 0.02, "opt_ftol_abs": 1e-5, "opt_maxtime": 0.05},
-                )
-            elif self.retarget_type == "DEXMV":
-                self.optimizer = VectorOptimizer(
-                    robot_adaptor=self.robot_adaptor,
-                    targets={
-                        "origin_links_name": [
-                            "world",
-                            "ee_link",
-                            "ee_link",
-                            "ee_link",
-                            "ee_link",
-                            "ee_link",
-                            "thdistal",
-                            "ffdistal",
-                            "mfdistal",
-                            "rfdistal",
-                            "lfdistal",
-                        ],
-                        "task_links_name": [
-                            "ee_link",
-                            "thtip",
-                            "fftip",
-                            "mftip",
-                            "rftip",
-                            "lftip",
-                            "thtip",
-                            "fftip",
-                            "mftip",
-                            "rftip",
-                            "lftip",
-                        ],
-                    },
-                    params={"huber_delta": 0.02, "opt_ftol_abs": 1e-5, "opt_maxtime": 0.05},
-                )
+            if self.retarget_type in {"POSITION", "VECTOR", "DEXMV", "VECTOR_WRIST"}:
+                raise ValueError(f"Unsupported removed retarget_type: {self.retarget_type}")
             elif self.retarget_type == "DEXPILOT":
                 self.optimizer = DexPilotOptimizer(
                     robot_adaptor=self.robot_adaptor,
@@ -240,30 +162,6 @@ class RobotTeleoperation:
                         "opt_ftol_abs": 1e-5,
                         "opt_maxtime": 0.05,
                     },
-                )
-            elif self.retarget_type == "VECTOR_WRIST":
-                self.optimizer = VectorWristOptimizer(
-                    robot_adaptor=self.robot_adaptor,
-                    targets={
-                        "origin_links_name": [
-                            "world",
-                            "ee_link",
-                            "ee_link",
-                            "ee_link",
-                            "ee_link",
-                            "ee_link",
-                        ],
-                        "task_links_name": [
-                            "ee_link",
-                            "thtip",
-                            "fftip",
-                            "mftip",
-                            "rftip",
-                            "lftip",
-                        ],
-                        "wrist_link_name": "ee_link",
-                    },
-                    params={"huber_delta": 0.02, "opt_ftol_abs": 1e-5, "opt_maxtime": 0.05},
                 )
             elif self.retarget_type == "VECTOR_WRIST_JOINT":
                 if self.setting_id == 3:

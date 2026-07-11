@@ -267,13 +267,27 @@ class JointLimitOverride:
         )
 
 
+def _coerce_optimizer_param(value: Any) -> Any:
+    """Convert optimizer params to floats while preserving backend-specific groups.
+
+    Args:
+        value: Raw optimizer param value loaded from YAML or a composed mapping.
+
+    Returns:
+        Float scalar for numeric leaves, or a nested dictionary for grouped backend params.
+    """
+    if isinstance(value, Mapping) or hasattr(value, "items"):
+        return {str(key): _coerce_optimizer_param(item) for key, item in value.items()}
+    return float(value)
+
+
 @dataclass(frozen=True)
 class RetargetingConfig:
     type: str
     setting_id: int
     ablation_option: int
     optimizer_class: str
-    optimizer_params: dict[str, float]
+    optimizer_params: dict[str, Any]
     targets: dict[str, RetargetTargetConfig]
     joint_limit_overrides: tuple[JointLimitOverride, ...]
 
@@ -289,7 +303,7 @@ class RetargetingConfig:
             setting_id=int(data.get("setting_id", 0)),
             ablation_option=int(data.get("ablation_option", 0)),
             optimizer_class=str(optimizer["class"]),
-            optimizer_params={key: float(value) for key, value in optimizer["params"].items()},
+            optimizer_params={key: _coerce_optimizer_param(value) for key, value in optimizer["params"].items()},
             targets=targets,
             joint_limit_overrides=tuple(
                 JointLimitOverride.from_dict(item) for item in data.get("joint_limit_overrides", [])
@@ -305,7 +319,7 @@ class RetargetingConfig:
     def validate(self) -> None:
         if self.optimizer_class != "VectorWristJointOptimizer":
             raise ValueError(f"Unsupported optimizer class in Phase 2: {self.optimizer_class}")
-        for required_param in ["huber_delta", "opt_ftol_abs", "opt_maxtime"]:
+        for required_param in ["huber_delta"]:
             if required_param not in self.optimizer_params:
                 raise ValueError(f"Missing optimizer param: {required_param}")
         for target in self.targets.values():
@@ -313,6 +327,57 @@ class RetargetingConfig:
         for override in self.joint_limit_overrides:
             if not override.indices:
                 raise ValueError("joint_limit_overrides indices must not be empty.")
+
+
+@dataclass(frozen=True)
+class SolverConfig:
+    name: str
+    params: dict[str, float]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SolverConfig":
+        """Build a solver config from backend-specific config data.
+
+        Args:
+            data: Mapping with solver name and numeric backend params.
+
+        Returns:
+            Typed solver config.
+        """
+        return cls(
+            name=str(data.get("name", data.get("solver", "nlopt_slsqp"))),
+            params={str(key): float(value) for key, value in data.get("params", {}).items()},
+        )
+
+    def validate(self) -> None:
+        """Validate backend-specific solver parameters.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        if self.name not in {"nlopt", "nlopt_slsqp", "scipy", "scipy_slsqp"}:
+            raise ValueError(f"Unsupported solver: {self.name}")
+        if self.name in {"nlopt", "nlopt_slsqp"} and "ftol_abs" not in self.params:
+            raise ValueError("Missing solver param for nlopt: ftol_abs")
+        if self.name in {"scipy", "scipy_slsqp"} and "ftol" not in self.params:
+            raise ValueError("Missing solver param for scipy: ftol")
+        if "maxtime" not in self.params:
+            raise ValueError("Missing solver param: maxtime")
+
+
+def default_solver_config() -> SolverConfig:
+    """Return the default solver config used by legacy direct retargeting config paths.
+
+    Args:
+        None.
+
+    Returns:
+        Default NLopt SLSQP solver config.
+    """
+    return SolverConfig(name="nlopt_slsqp", params={"ftol_abs": 1e-5, "maxtime": 0.05})
 
 
 @dataclass(frozen=True)
@@ -339,6 +404,7 @@ class ReplayAppConfig:
     result: str | None
     robot: str
     retargeting: str
+    solver: str | None
     start: int
     end: int
     stride: int
@@ -351,6 +417,7 @@ class ReplayAppConfig:
             result=None if data.get("result") is None else str(data["result"]),
             robot=str(data["robot"]),
             retargeting=str(data["retargeting"]),
+            solver=None if data.get("solver") is None else str(data["solver"]),
             start=int(data.get("start", 0)),
             end=int(data.get("end", -1)),
             stride=int(data.get("stride", 1)),
@@ -387,6 +454,14 @@ def load_retargeting_config(path: str | Path | Mapping[str, Any] | RetargetingCo
     if isinstance(path, RetargetingConfig):
         return path
     config = RetargetingConfig.from_dict(_load_config_source(path))
+    config.validate()
+    return config
+
+
+def load_solver_config(path: str | Path | Mapping[str, Any] | SolverConfig | None) -> SolverConfig:
+    if isinstance(path, SolverConfig):
+        return path
+    config = default_solver_config() if path is None else SolverConfig.from_dict(_load_config_source(path))
     config.validate()
     return config
 
