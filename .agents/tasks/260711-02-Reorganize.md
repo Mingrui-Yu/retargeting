@@ -45,6 +45,54 @@
 
 完成删除 `RobotTeleoperation` 中不可达的 MuJoCo qpos 同步逻辑：移除了 `mujoco_vis` 构造参数、参数文档、`self.robot_mujoco = None` / 配置错误分支，以及 `hand_retarget()` 末尾的 `set_joint_pos(qpos)` 和 `sim_step(refresh=True)`。同步从 core demo、replay 和两个 ROS 调用点移除对应的 `mujoco_vis=False` 实参。保留 `src/retargeting/robot_mujoco.py`，因为它仍是 ROS 控制层单独导入的仿真模块，不属于本次已删除的 dead code。已运行 `/home/ymr/miniconda3/envs/retargeting/bin/python -m py_compile src/retargeting/robot_teleoperation.py src/retargeting/retargeting_replay.py ws_ros2/src/retargeting_benchmark/src/main_robot_teleoperation.py ws_ros2/src/retargeting_benchmark/src/robot_teleoperation_ros.py`，并运行 `/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests/test_replay_smoke.py tests/test_config_loading.py`，结果 `20 passed`。
 
+### 2026-07-12-11-11
+
+完成 retargeting/teleoperation 分层重构。新增 `retargeting.core.Retargeter` 和 `RetargetingResult`，使核心算法只接收 canonical `HandObservation`、输出 raw qpos 与 solver diagnostics，不再依赖 detector、OpenCV、输出平滑、ROS 或 robot control。新增顶层 `teleoperation` package：`HandObservationAdapter` 负责 RGB/AVP 检测、坐标标定、相对 wrist 初始对齐和尺度处理；`QposOutputFilter` 负责 EMA 输出过滤；`TeleoperationSession` 负责组合输入、core、benchmark diagnostics 和执行输出。原 `retargeting.robot_teleoperation.RobotTeleoperation` 保留为兼容 facade。retargeting profile 的算法参数改入 `retargeting` section，`max_joint_speed` 留在独立 `teleoperation` command section；replay 和 ROS 节点改为 composition，README 记录新的依赖方向。新增结构边界测试。已运行 `/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests`，结果 `51 passed`。
+
+### 2026-07-12-11-18
+
+完成 optimizer 实现的目录迁移。原 `src/retargeting/retarget_optimizer.py` 的实现移动到 `src/retargeting/core/optimizers/retarget_optimizer.py`，并由 `retargeting.core.optimizers` 成为 `RetargetOptimizer`、`VectorWristJointOptimizer`、`VectorWristJointOptimizerV2` 与注册表的正式导入路径。原模块改为仅兼容 re-export，保证既有配置和外部旧 import 可继续使用；`Retargeter` 与需 monkeypatch solver factory 的回归测试已迁至新 canonical 路径。新增测试确认新旧 import 指向相同 optimizer class。已运行 `/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests`，结果 `52 passed`。
+
+### 2026-07-12-11-25
+
+完成 optimizer 类文件拆分。`RetargetOptimizer` 和 solver 参数提取移入 `src/retargeting/core/optimizers/base.py`；`DexPilotOptimizer` 移入 `dexpilot.py`；保持共同语义的 `VectorWristJointOptimizer` 与 V2 保持在 `vector_wrist_joint.py`；配置字符串到实现类的映射移入 `registry.py`。`__init__.py` 提供统一公开 API，旧 `retargeting.retarget_optimizer` compatibility re-export 保持有效。回归测试改为在 `base` 模块 monkeypatch solver factory，符合拆分后的依赖位置。已运行 `/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests`，结果 `52 passed`。
+
+### 2026-07-12-11-28
+
+完成 callback solver adapter 的 core 迁移。原 `src/retargeting/optimization/solvers.py` 实现移动到 `src/retargeting/core/solvers/callback.py`，并新增 `retargeting.core.solvers` 作为 `CallbackSolver`、NLopt/SciPy SLSQP adapter 与 `create_callback_solver()` 的正式公开入口。`core/optimizers/base.py` 已直接依赖新路径，因此 core 内不再 import `retargeting.optimization`。旧 `retargeting.optimization` package 与 `optimization/solvers.py` 均保留 compatibility re-export；新增测试确认新旧 factory 是同一对象。已运行 `/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests`，结果 `53 passed`。
+
+### 2026-07-12-11-30
+
+完成删除旧 `src/retargeting/optimization/` compatibility package。同步将 solver adapter 测试全部改为从 `retargeting.core.solvers` 导入，并将架构测试改为检查 public package 与 callback implementation 的同一 factory。搜索确认 `src`、`tests` 和 `ws_ros2` 中已不存在 `retargeting.optimization` import。已运行 `/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests`，结果 `53 passed`。
+
+### 2026-07-12-11-36
+
+完成删除旧 `src/retargeting/retarget_optimizer.py` compatibility module。测试中的 optimizer import 和 ROS workspace `retarget_optimizer.py` wrapper 均改为直接使用 `retargeting.core.optimizers`；相应配置加载测试也去除 “legacy import” 命名。搜索确认 `src`、`tests` 与 `ws_ros2` 不再存在 `retargeting.retarget_optimizer` 或无前缀 `retarget_optimizer` import。已运行 `/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests`，结果 `53 passed`。
+
+### 2026-07-12-11-38
+
+完成删除 `src/retargeting/robot_teleoperation.py` compatibility facade，以及 ROS workspace 中仅转发它的 `src/robot_teleoperation.py` 和 `src/bck/robot_teleoperation.py`。实际 live 主入口已直接使用 `TeleoperationSession`，ROS node 已采用 composition，因此无需迁移业务调用。搜索确认 `src`、`tests`、`ws_ros2`、configs 和 README 不再存在旧 `robot_teleoperation` import；保留 `main_robot_teleoperation.py` 与 `robot_teleoperation_ros.py` 作为实际入口。已运行 `/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests`，结果 `53 passed`。
+
+### 2026-07-12-11-42
+
+完成 detector 输入适配层迁移。`src/retargeting/avp_detector.py` 移至 `src/retargeting/inputs/avp.py`，`single_hand_detector.py` 移至 `inputs/rgb.py`；teleoperation input adapter、offline replay、测试和 ROS workspace detector wrapper 全部改为新路径。`retargeting.inputs.__init__` 明确保持轻量，仅导出 canonical observation contract，避免 core import eager 加载 optional MediaPipe/RGB dependency。搜索确认没有旧顶层 detector import。已运行 py_compile 和 `/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests`，结果 `53 passed`。
+
+### 2026-07-12-11-58
+
+完成离线模块按 input / pipeline / app 分层重命名。原 `offline_replay.py` 移至 `inputs/offline_avp_replay.py`，`retargeting_replay.py` 移至 `pipelines/offline_retargeting.py`，`offline_retarget.py` 移至 `apps/offline_retarget.py`；新增对应 package init。同步更新 benchmark、viser、测试、core import-boundary 测试、README CLI 命令和保存 metadata 的 command 字段。删除两个不再对应正式模块路径的 ROS workspace replay wrapper。搜索确认无旧模块 import。已运行 py_compile 和 `/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests`，结果 `53 passed`。
+
+### 2026-07-12-12-11
+
+完成 benchmark 和 Viser app 分层。原 `benchmark_trajectory.py` 移至 `pipelines/benchmark_report.py`，保留 metrics、summary、artifact output 和 plot 报告逻辑；Hydra composition 与 CLI main 移至 `apps/benchmark.py`。原 `viser_retargeting_visualize.py` 的 renderer 与 scene helper 移至 `visualization/viser_replay.py`，argparse/Hydra option resolution 与 main 移至 `apps/viser_retargeting_visualize.py`。offline app 的 post actions、测试和 README 命令全部更新，删除不再对应正式模块路径的 ROS workspace Viser wrapper。已运行 py_compile 和 `/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests`，结果 `53 passed`。
+
+### 2026-07-12-12-21
+
+完成 robot/evaluation/artifact/simulation 职责目录迁移。`robot_adaptor.py` 和 `robot_pinocchio.py` 移至 `core/kinematics/adaptor.py` 与 `pinocchio_model.py`；`robot_benchmark.py` 移至 `evaluation/robot_metrics.py`；`trajectory_result.py` 移至 `artifacts/trajectory.py`；有 MuJoCo viewer 副作用的 `robot_mujoco.py` 移至 `simulation/mujoco.py`。新增相应 package init，更新 core optimizer、teleoperation session、pipelines、apps、tests 和 ROS workspace wrapper 的 import，且不保留旧顶层 alias。搜索确认没有旧顶层 robot/artifact import。已运行 py_compile 和 `/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests`，结果 `53 passed`。
+
+### 2026-07-12-12-25
+
+完成将 MuJoCo simulation 合并至 backend 层。`simulation/mujoco.py` 移至 `backends/mujoco.py` 并删除空的 `simulation/` package；ROS workspace `robot_mujoco.py` wrapper 改为新路径。`RobotBackend` protocol 的命令接口统一为当前 MuJoCo、real robot 和 ROS control 已使用的 `ctrl_joint_pos(qpos)`，没有引入额外命名 alias。搜索确认无旧 simulation 或 `command_joint_pos` 引用。已运行 py_compile 和 `/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests`，结果 `53 passed`。
+
 ## Next Request 1
 
 ## Next Request 2

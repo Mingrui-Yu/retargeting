@@ -103,9 +103,10 @@ def test_retarget_injects_explicit_fixed_qpos_indices(monkeypatch):
             """
             return np.asarray(qpos, dtype=float).copy()
 
-    from retargeting import retarget_optimizer
+    from retargeting.core.optimizers import base as optimizer_base
+    from retargeting.core.optimizers import vector_wrist_joint as retarget_optimizer
 
-    monkeypatch.setattr(retarget_optimizer, "create_callback_solver", lambda _solver, _opt_dim: FakeSolver())
+    monkeypatch.setattr(optimizer_base, "create_callback_solver", lambda _solver, _opt_dim: FakeSolver())
 
     class RecordingOptimizer(retarget_optimizer.RetargetOptimizer):
         """Minimal optimizer that records fixed qpos values from ref_values."""
@@ -281,7 +282,7 @@ def test_nlopt_solver_reuses_optimizer_between_objective_updates(monkeypatch):
     fake_nlopt = types.SimpleNamespace(LD_SLSQP=7, opt=create_fake_opt)
     monkeypatch.setitem(sys.modules, "nlopt", fake_nlopt)
 
-    from retargeting.optimization.solvers import NloptSlsqpSolver
+    from retargeting.core.solvers import NloptSlsqpSolver
 
     objective_calls = []
 
@@ -376,7 +377,7 @@ def test_nlopt_solver_non_positive_maxtime_disables_time_limit(monkeypatch):
     fake_nlopt = types.SimpleNamespace(LD_SLSQP=7, opt=lambda _algorithm, _opt_dim: fake_opt)
     monkeypatch.setitem(sys.modules, "nlopt", fake_nlopt)
 
-    from retargeting.optimization.solvers import NloptSlsqpSolver
+    from retargeting.core.solvers import NloptSlsqpSolver
 
     solver = NloptSlsqpSolver(2)
     solver.configure({"maxtime": -1})
@@ -393,7 +394,7 @@ def test_scipy_solver_non_positive_maxtime_disables_time_limit():
     Returns:
         None.
     """
-    from retargeting.optimization.solvers import ScipySlsqpSolver
+    from retargeting.core.solvers import ScipySlsqpSolver
 
     solver = ScipySlsqpSolver(2)
     solver.configure({"maxtime": 0.01})

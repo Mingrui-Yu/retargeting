@@ -206,33 +206,33 @@ def _float_tuple(values: Any, field_name: str) -> tuple[float, ...]:
 
 
 @dataclass(frozen=True)
-class RobotTeleoperationConfig:
+class RetargetingRuntimeConfig:
+    """Robot-specific quantities used directly by the retargeting objective."""
+
     arm_dof: int
     human_wrist_index: int
     joint_position_weights: tuple[float, ...]
     joint_velocity_weights: tuple[float, ...]
-    max_joint_speed: tuple[float, ...]
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "RobotTeleoperationConfig":
-        """Build robot-specific teleoperation metadata from config data.
+    def from_dict(cls, data: dict[str, Any]) -> "RetargetingRuntimeConfig":
+        """Build robot-specific objective metadata from config data.
 
         Args:
-            data: Mapping with robot-specific teleoperation weights and indices.
+            data: Mapping with robot-specific objective weights and indices.
 
         Returns:
-            Typed teleoperation config for one robot/hand embodiment.
+            Typed retargeting runtime configuration.
         """
         return cls(
             arm_dof=int(data["arm_dof"]),
             human_wrist_index=int(data.get("human_wrist_index", 0)),
             joint_position_weights=_float_tuple(data["joint_position_weights"], "joint_position_weights"),
             joint_velocity_weights=_float_tuple(data["joint_velocity_weights"], "joint_velocity_weights"),
-            max_joint_speed=_float_tuple(data["max_joint_speed"], "max_joint_speed"),
         )
 
     def validate(self, qpos_size: int) -> None:
-        """Validate teleoperation metadata against the robot qpos size.
+        """Validate objective metadata against the robot qpos size.
 
         Args:
             qpos_size: Number of actuated robot joints configured for this robot.
@@ -247,10 +247,46 @@ class RobotTeleoperationConfig:
         for field_name, values in [
             ("joint_position_weights", self.joint_position_weights),
             ("joint_velocity_weights", self.joint_velocity_weights),
-            ("max_joint_speed", self.max_joint_speed),
         ]:
             if len(values) != qpos_size:
                 raise ValueError(f"{field_name} has {len(values)} values but robot qpos has {qpos_size}.")
+
+
+@dataclass(frozen=True)
+class TeleoperationCommandConfig:
+    """Robot-output limits owned by the teleoperation execution layer."""
+
+    max_joint_speed: tuple[float, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "TeleoperationCommandConfig":
+        """Build output command limits from config data.
+
+        Args:
+            data: Mapping with robot command limits.
+
+        Returns:
+            Typed teleoperation command configuration.
+        """
+        return cls(max_joint_speed=_float_tuple(data["max_joint_speed"], "max_joint_speed"))
+
+    def validate(self, qpos_size: int) -> None:
+        """Validate command limits against the robot configuration size.
+
+        Args:
+            qpos_size: Number of actuated qpos values.
+
+        Returns:
+            None.
+        """
+        if len(self.max_joint_speed) != qpos_size:
+            raise ValueError(
+                f"max_joint_speed has {len(self.max_joint_speed)} values but robot qpos has {qpos_size}."
+            )
+
+
+# Kept as an import-compatible name for callers that used the old schema type.
+RobotTeleoperationConfig = RetargetingRuntimeConfig
 
 
 @dataclass(frozen=True)
@@ -619,7 +655,8 @@ class RetargetingProfileConfig:
     method: str
     target: RetargetTargetConfig
     objective: RetargetingObjectiveConfig
-    teleoperation: RobotTeleoperationConfig
+    retargeting: RetargetingRuntimeConfig
+    teleoperation: TeleoperationCommandConfig
     joint_limit_overrides: tuple[JointLimitOverride, ...]
 
     @classmethod
@@ -628,18 +665,26 @@ class RetargetingProfileConfig:
 
         Args:
             data: Mapping with robot/method sources and robot-method-specific targets,
-                objective weights, and teleoperation parameters.
+                objective weights, retargeting parameters, and teleoperation output limits.
 
         Returns:
             Typed retargeting profile config.
         """
+        retargeting_data = data.get("retargeting")
+        teleoperation_data = data.get("teleoperation")
+        if retargeting_data is None:
+            # Legacy profiles stored algorithm and command settings together.
+            retargeting_data = teleoperation_data
+        if teleoperation_data is None:
+            raise ValueError("Retargeting profile requires a teleoperation command configuration.")
         return cls(
             name=str(data["name"]),
             robot=str(data["robot"]),
             method=str(data["method"]),
             target=RetargetTargetConfig.from_dict(data["target"]),
             objective=RetargetingObjectiveConfig.from_dict(data.get("objective")),
-            teleoperation=RobotTeleoperationConfig.from_dict(data["teleoperation"]),
+            retargeting=RetargetingRuntimeConfig.from_dict(retargeting_data),
+            teleoperation=TeleoperationCommandConfig.from_dict(teleoperation_data),
             joint_limit_overrides=tuple(
                 JointLimitOverride.from_dict(item) for item in data.get("joint_limit_overrides", [])
             ),
@@ -662,6 +707,7 @@ class RetargetingProfileConfig:
                 raise ValueError("joint_limit_overrides indices must not be empty.")
         if robot_config is None:
             return
+        self.retargeting.validate(len(robot_config.initial_qpos))
         self.teleoperation.validate(len(robot_config.initial_qpos))
         frame_names = {"world", *robot_config.visual_frame_names}
         target_frame_names = set()

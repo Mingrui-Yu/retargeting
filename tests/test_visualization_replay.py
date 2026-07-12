@@ -14,8 +14,8 @@ def test_offline_replay_rebuilds_stream_frames_without_avp_stream():
     _np()
     pytest.importorskip("scipy")
 
-    from retargeting.offline_replay import load_offline_replay
-    from retargeting.avp_detector import parse_avp_stream_frame
+    from retargeting.inputs.offline_avp_replay import load_offline_replay
+    from retargeting.inputs.avp import parse_avp_stream_frame
 
     replay = load_offline_replay(FIXTURE)
 
@@ -37,7 +37,7 @@ def test_retarget_replay_recomputes_human_and_robot_geometry_headless():
     pytest.importorskip("torch")
     pytest.importorskip("scipy")
 
-    from retargeting.retargeting_replay import build_retarget_replay_frames
+    from retargeting.pipelines.offline_retargeting import build_retarget_replay_frames
 
     context, frames = build_retarget_replay_frames(
         data_file=str(FIXTURE),

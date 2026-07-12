@@ -1,7 +1,7 @@
 import numpy as np
 
 from retargeting.config import RobotBenchmarkConfig
-from retargeting.robot_adaptor import RobotAdaptor
+from retargeting.core.kinematics.adaptor import RobotAdaptor
 
 
 AXIS_TO_COLUMN = {"x": 0, "y": 1, "z": 2}

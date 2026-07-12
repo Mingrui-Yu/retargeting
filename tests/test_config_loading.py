@@ -43,7 +43,7 @@ def test_robot_benchmark_uses_configured_fingertip_metadata():
     import numpy as np
 
     from retargeting.config import load_robot_config
-    from retargeting.robot_benchmark import RobotBenchmark
+    from retargeting.evaluation.robot_metrics import RobotBenchmark
 
     class FakeRobotModel:
         def __init__(self, poses):
@@ -155,9 +155,9 @@ def test_default_teleoperation_mode_is_simulation():
     assert config.output.smoothing_alpha == 0.3
 
 
-def test_retargeting_config_accepts_legacy_vector_wrist_joint_class():
+def test_retargeting_config_accepts_vector_wrist_joint_class():
     from retargeting.config import load_config_data, load_retargeting_config
-    from retargeting.retarget_optimizer import VectorWristJointOptimizer, get_optimizer_class
+    from retargeting.core.optimizers import VectorWristJointOptimizer, get_optimizer_class
 
     config_data = load_config_data("configs/retargeting_methods/vector_wrist_joint.yaml")
     config_data["optimizer"]["class"] = "VectorWristJointOptimizer"
@@ -183,7 +183,7 @@ def test_solver_configs_load_backend_specific_params():
 
 
 def test_offline_retarget_config_accepts_post_action_overrides():
-    from retargeting.offline_retarget import compose_hydra_offline_retarget_config
+    from retargeting.apps.offline_retarget import compose_hydra_offline_retarget_config
 
     config = compose_hydra_offline_retarget_config(
         [
@@ -216,7 +216,7 @@ def test_replay_app_config_loads_defaults():
 
 def test_replay_hydra_style_mapping_resolves_runtime_options():
     from retargeting.config import load_config_data
-    from retargeting.viser_retargeting_visualize import resolve_replay_options_from_config
+    from retargeting.apps.viser_retargeting_visualize import resolve_replay_options_from_config
 
     config = {
         "data": "tests/fixtures/avp_short_replay.npz",

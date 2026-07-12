@@ -109,7 +109,7 @@ def build_vector_wrist_joint_regression_case(monkeypatch, optimizer_class_name="
 
     Args:
         monkeypatch: Pytest monkeypatch fixture used to replace the solver factory.
-        optimizer_class_name: Optimizer class name to instantiate from `retargeting.retarget_optimizer`.
+        optimizer_class_name: Optimizer class name to instantiate from `retargeting.core.optimizers`.
 
     Returns:
         Tuple of numpy module, objective callback, probe qpos, and optimization dimension.
@@ -118,12 +118,13 @@ def build_vector_wrist_joint_regression_case(monkeypatch, optimizer_class_name="
     pytest.importorskip("pinocchio")
     pytest.importorskip("torch")
 
-    from retargeting import retarget_optimizer
+    from retargeting.core.optimizers import base as optimizer_base
+    from retargeting.core.optimizers import vector_wrist_joint as retarget_optimizer
     from retargeting.config import load_retargeting_config, load_retargeting_profile_config, load_robot_config
-    from retargeting.robot_adaptor import RobotAdaptor
-    from retargeting.robot_pinocchio import RobotPinocchio
+    from retargeting.core.kinematics.adaptor import RobotAdaptor
+    from retargeting.core.kinematics.pinocchio_model import RobotPinocchio
 
-    monkeypatch.setattr(retarget_optimizer, "create_callback_solver", lambda _solver, _opt_dim: _NoopSolver())
+    monkeypatch.setattr(optimizer_base, "create_callback_solver", lambda _solver, _opt_dim: _NoopSolver())
 
     robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
     profile_config = load_retargeting_profile_config("configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml")

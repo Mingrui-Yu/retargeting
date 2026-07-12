@@ -57,7 +57,7 @@ class RobotAdaptor:
 
 if __name__ == "__main__":
     from retargeting.config import load_robot_config
-    from retargeting.robot_pinocchio import RobotPinocchio
+    from retargeting.core.kinematics.pinocchio_model import RobotPinocchio
 
     robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
 

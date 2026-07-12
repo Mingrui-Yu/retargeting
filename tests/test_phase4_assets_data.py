@@ -37,16 +37,17 @@ def test_retargeting_profiles_carry_robot_method_parameters():
     for config_path in Path("configs/retargeting_profiles").glob("*.yaml"):
         profile_config = load_retargeting_profile_config(config_path)
         robot_config = load_robot_config(profile_config.robot)
-        teleop_config = profile_config.teleoperation
+        retargeting_runtime_config = profile_config.retargeting
+        teleoperation_command_config = profile_config.teleoperation
         qpos_size = len(robot_config.initial_qpos)
 
         assert profile_config.method == "configs/retargeting_methods/vector_wrist_joint.yaml"
         assert profile_config.objective.pinch_transition_threshold == 0.1
         assert profile_config.objective.weights.world_thumb == 10.0
-        assert 0 < teleop_config.arm_dof <= qpos_size
-        assert len(teleop_config.joint_position_weights) == qpos_size
-        assert len(teleop_config.joint_velocity_weights) == qpos_size
-        assert len(teleop_config.max_joint_speed) == qpos_size
+        assert 0 < retargeting_runtime_config.arm_dof <= qpos_size
+        assert len(retargeting_runtime_config.joint_position_weights) == qpos_size
+        assert len(retargeting_runtime_config.joint_velocity_weights) == qpos_size
+        assert len(teleoperation_command_config.max_joint_speed) == qpos_size
         assert len(profile_config.target.link_pairs) == 3 * len(robot_config.benchmark.fingertips)
 
 

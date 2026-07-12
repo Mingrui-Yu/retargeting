@@ -99,7 +99,7 @@ def test_avp_detector_static_detect_headless(monkeypatch):
     fake_avp_stream.VisionProStreamer = object
     monkeypatch.setitem(sys.modules, "avp_stream", fake_avp_stream)
 
-    from retargeting.avp_detector import AvpDetector
+    from retargeting.inputs.avp import AvpDetector
 
     data = _load_fixture()
     stream = _stream_frame(data, frame_idx=0)
@@ -116,7 +116,7 @@ def test_robot_pinocchio_loads_current_urdf_headless():
     pytest.importorskip("pinocchio")
 
     from retargeting.config import load_robot_config
-    from retargeting.robot_pinocchio import RobotPinocchio
+    from retargeting.core.kinematics.pinocchio_model import RobotPinocchio
 
     robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
     robot = RobotPinocchio(robot_config.robot_file_path, robot_config.model.type)
@@ -140,8 +140,8 @@ def test_robot_adaptor_forward_backward_qpos_round_trip():
     pytest.importorskip("pinocchio")
 
     from retargeting.config import load_robot_config
-    from retargeting.robot_adaptor import RobotAdaptor
-    from retargeting.robot_pinocchio import RobotPinocchio
+    from retargeting.core.kinematics.adaptor import RobotAdaptor
+    from retargeting.core.kinematics.pinocchio_model import RobotPinocchio
 
     robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
     robot_model = RobotPinocchio(robot_config.robot_file_path, robot_config.model.type)
@@ -169,10 +169,10 @@ def test_vector_wrist_joint_optimizer_single_frame_smoke():
     pytest.importorskip("nlopt")
     pytest.importorskip("torch")
 
-    from retargeting.retarget_optimizer import VectorWristJointOptimizer
+    from retargeting.core.optimizers import VectorWristJointOptimizer
     from retargeting.config import load_retargeting_config, load_retargeting_profile_config, load_robot_config, load_solver_config
-    from retargeting.robot_adaptor import RobotAdaptor
-    from retargeting.robot_pinocchio import RobotPinocchio
+    from retargeting.core.kinematics.adaptor import RobotAdaptor
+    from retargeting.core.kinematics.pinocchio_model import RobotPinocchio
 
     robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
     profile_config = load_retargeting_profile_config("configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml")
@@ -233,9 +233,9 @@ def test_vector_wrist_joint_optimizer_scipy_slsqp_single_frame_smoke():
     pytest.importorskip("torch")
 
     from retargeting.config import load_retargeting_config, load_retargeting_profile_config, load_robot_config, load_solver_config
-    from retargeting.retarget_optimizer import VectorWristJointOptimizer
-    from retargeting.robot_adaptor import RobotAdaptor
-    from retargeting.robot_pinocchio import RobotPinocchio
+    from retargeting.core.optimizers import VectorWristJointOptimizer
+    from retargeting.core.kinematics.adaptor import RobotAdaptor
+    from retargeting.core.kinematics.pinocchio_model import RobotPinocchio
 
     robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
     profile_config = load_retargeting_profile_config("configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml")

@@ -32,7 +32,7 @@ objective:
     wrist_rotation: 0.1
     arm_link_vector: 10.0
     arm_wrist_rotation: 1.0
-teleoperation:
+retargeting:
   arm_dof: 9
   human_wrist_index: 0
   joint_position_weights:
@@ -99,6 +99,7 @@ teleoperation:
     - 0.01
     - 0.01
     - 0.01
+teleoperation:
   max_joint_speed:
     - 0.2
     - 0.2

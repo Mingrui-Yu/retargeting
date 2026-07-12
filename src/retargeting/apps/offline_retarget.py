@@ -15,8 +15,8 @@ from retargeting.config import (
     resolve_project_path,
     to_plain_config_data,
 )
-from retargeting.retargeting_replay import DEFAULT_DETECTION_SOURCE_CONFIG_PATH, run_offline_retargeting
-from retargeting.trajectory_result import save_retargeting_trajectory
+from retargeting.pipelines.offline_retargeting import DEFAULT_DETECTION_SOURCE_CONFIG_PATH, run_offline_retargeting
+from retargeting.artifacts.trajectory import save_retargeting_trajectory
 
 
 def compose_hydra_offline_retarget_config(overrides: list[str] | None = None) -> dict[str, Any]:
@@ -170,7 +170,7 @@ def run_benchmark_post_action(config: dict[str, Any]) -> tuple[Path, Path | None
     Returns:
         Tuple of benchmark output directory and optional plot output directory.
     """
-    from retargeting.benchmark_trajectory import run_benchmark_from_config
+    from retargeting.pipelines.benchmark_report import run_benchmark_from_config
 
     return run_benchmark_from_config(config)
 
@@ -184,7 +184,8 @@ def run_visualize_post_action(config: dict[str, Any]) -> None:
     Returns:
         None. The viewer runs until interrupted.
     """
-    from retargeting.viser_retargeting_visualize import resolve_replay_options_from_config, run_replay_viewer
+    from retargeting.apps.viser_retargeting_visualize import resolve_replay_options_from_config
+    from retargeting.visualization.viser_replay import run_replay_viewer
 
     run_replay_viewer(resolve_replay_options_from_config(config))
 
@@ -271,7 +272,7 @@ def run_offline_retarget_from_config(config: Any, argv: list[str] | None = None)
         teleoperation_mode_config=teleoperation_mode_config,
         solver_config=solver_config,
     )
-    metadata.command = ["python", "-m", "retargeting.offline_retarget", *(argv or [])]
+    metadata.command = ["python", "-m", "retargeting.apps.offline_retarget", *(argv or [])]
     output_dir = resolve_output_dir(config_data, robot_config.name, retargeting_config.type)
     output_dir = save_retargeting_trajectory(output_dir, trajectory, metadata)
     run_post_retarget_actions(config_data, output_dir, profile_source, solver_source)

@@ -19,7 +19,7 @@ from robot_benchmark import RobotBenchmark
 from robot_control import RobotControl
 from robot_pinocchio import RobotPinocchio
 from robot_real import RobotReal
-from robot_teleoperation import RobotTeleoperation
+from teleoperation.session import TeleoperationSession
 from rviz_visualize import RvizVisualizer
 from utils.utils_keyboard import KeyboardListener
 
@@ -125,15 +125,14 @@ class RobotTeleoperationMain:
             self.robot_model,
             self.robot_adaptor,
             initial_qpos=np.asarray(robot_config.initial_qpos, dtype=float),
-            arm_dof=profile_config.teleoperation.arm_dof,
+            arm_dof=profile_config.retargeting.arm_dof,
             use_hardware=self.use_hardware,
             use_virtual_hardware=self.use_virtual_hardware,
             use_high_freq_interp=self.use_high_freq_interp,
             node=self.node,
         )
-        self.robot_teleop = RobotTeleoperation(
+        self.robot_teleop = TeleoperationSession(
             robot_adaptor=self.robot_adaptor,
-            robot_control=self.robot_control,
             robot_config=robot_config,
             profile_config=profile_config,
             method_config=retargeting_config,

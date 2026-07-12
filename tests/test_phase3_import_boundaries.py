@@ -29,9 +29,9 @@ def test_core_import_has_no_ros_dependency():
     sys.meta_path.insert(0, finder)
     try:
         import retargeting  # noqa: F401
-        from retargeting import offline_replay, retargeting_replay  # noqa: F401
-        from retargeting.robot_adaptor import RobotAdaptor  # noqa: F401
-        from retargeting.robot_pinocchio import RobotPinocchio  # noqa: F401
+        from retargeting.inputs import offline_avp_replay  # noqa: F401
+        from retargeting.pipelines import offline_retargeting  # noqa: F401
+        from retargeting.core.kinematics import RobotAdaptor, RobotPinocchio  # noqa: F401
     finally:
         sys.meta_path.remove(finder)
 

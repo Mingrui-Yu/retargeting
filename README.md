@@ -20,6 +20,7 @@ It provides:
 | Path | Purpose |
 | --- | --- |
 | `src/retargeting/` | Core Python package for offline replay, config loading, kinematics, and retargeting logic. |
+| `src/teleoperation/` | Input adapters, output filters, and runtime composition around the pure retargeting core. |
 | `src/retargeting_ros/` | Optional ROS adapter package for ROS messages, RViz, and real robot integration. |
 | `configs/` | Robot, retargeting, and app-level YAML configs. |
 | `assets/robots/` | Robot URDF/MJCF assets organized by robot. |
@@ -31,10 +32,10 @@ It provides:
 The intended dependency direction is:
 
 ```text
-configs/assets -> retargeting core -> apps/CLI -> retargeting_ros / hardware / visualization
+configs/assets -> input adapters -> retargeting.core -> output adapters -> apps/CLI / retargeting_ros
 ```
 
-The core `retargeting` package should be usable without ROS, cameras, RViz, or real robot hardware.
+`retargeting.core.Retargeter` consumes a canonical `HandObservation` and produces raw qpos. It has no dependency on ROS, cameras, RViz, hardware control, or output smoothing. `teleoperation` owns detector adaptation, coordinate calibration, command smoothing, and the live runtime composition.
 
 ## Install
 
@@ -68,32 +69,32 @@ ROS/RViz and real robot paths additionally require ROS2 Humble and the ROS packa
 Generate a reusable offline retargeting result from the repository root:
 
 ```bash
-python -m retargeting.offline_retarget end=200 run_name=quickstart_leap
+python -m retargeting.apps.offline_retarget end=200 run_name=quickstart_leap
 ```
 
 The same command can optionally run follow-up steps immediately after saving the result:
 
 ```bash
-python -m retargeting.offline_retarget end=200 run_name=quickstart_leap post.benchmark.enabled=true
-python -m retargeting.offline_retarget end=200 run_name=quickstart_leap post.visualize.enabled=true
+python -m retargeting.apps.offline_retarget end=200 run_name=quickstart_leap post.benchmark.enabled=true
+python -m retargeting.apps.offline_retarget end=200 run_name=quickstart_leap post.visualize.enabled=true
 ```
 
 Visualize the saved result in the `viser` web viewer:
 
 ```bash
-python -m retargeting.viser_retargeting_visualize result=outputs/quickstart_leap/retargeting
+python -m retargeting.apps.viser_retargeting_visualize result=outputs/quickstart_leap/retargeting
 ```
 
 Compute benchmark statistics and plots from the same result:
 
 ```bash
-python -m retargeting.benchmark_trajectory result=outputs/quickstart_leap/retargeting
+python -m retargeting.apps.benchmark result=outputs/quickstart_leap/retargeting
 ```
 
 For quick inspection, the viewer can still retarget directly without saving an intermediate result:
 
 ```bash
-python -m retargeting.viser_retargeting_visualize end=200
+python -m retargeting.apps.viser_retargeting_visualize end=200
 ```
 
 The default Hydra replay config uses:
@@ -123,8 +124,8 @@ Robot-specific, method-specific, and robot-method profile values are configured 
 | `configs/robots/panda_leap_paxini.yaml` | Panda arm + Leap hand with Paxini fingertips. |
 | `configs/robots/panda_shadow.yaml` | Panda arm + Shadow hand. |
 | `configs/retargeting_methods/vector_wrist_joint.yaml` | Vector wrist joint method metadata and optimizer defaults. |
-| `configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml` | Panda+Leap profile binding robot, method, target links, objective weights, and teleoperation parameters. |
-| `configs/retargeting_profiles/vector_wrist_joint_panda_shadow.yaml` | Panda+Shadow profile binding robot, method, target links, objective weights, and teleoperation parameters. |
+| `configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml` | Panda+Leap profile binding robot, method, target links, objective weights, retargeting runtime weights, and teleoperation command limits. |
+| `configs/retargeting_profiles/vector_wrist_joint_panda_shadow.yaml` | Panda+Shadow profile binding robot, method, target links, objective weights, retargeting runtime weights, and teleoperation command limits. |
 | `configs/solvers/nlopt_slsqp.yaml` | NLopt SLSQP backend and stopping/runtime parameters. |
 | `configs/solvers/scipy_slsqp.yaml` | SciPy SLSQP backend and stopping/runtime parameters. |
 | `configs/apps/replay_avp.yaml` | Offline replay app defaults. |
@@ -132,7 +133,7 @@ Robot-specific, method-specific, and robot-method profile values are configured 
 Replay uses Hydra config groups. Override groups and values from the command line:
 
 ```bash
-python -m retargeting.viser_retargeting_visualize \
+python -m retargeting.apps.viser_retargeting_visualize \
   retargeting_profiles=vector_wrist_joint_panda_shadow \
   solvers=scipy_slsqp \
   data=tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz \
@@ -143,7 +144,7 @@ python -m retargeting.viser_retargeting_visualize \
 Legacy argparse-style flags remain available for older scripts:
 
 ```bash
-python -m retargeting.viser_retargeting_visualize \
+python -m retargeting.apps.viser_retargeting_visualize \
   --profile configs/retargeting_profiles/vector_wrist_joint_panda_shadow.yaml
 ```
 
@@ -152,7 +153,7 @@ When adding a new robot, prefer this route:
 1. Add robot assets under `assets/robots/<robot_name>/`.
 2. Add a robot config under `configs/robots/<robot_name>.yaml`.
 3. Put joints, frames, model paths, initial qpos, and hand scale in the config.
-4. Put robot-method-specific target links, objective weights, and teleoperation parameters in `configs/retargeting_profiles/<method>_<robot_name>.yaml`.
+4. Put robot-method-specific target links, objective weights, and retargeting runtime weights in `configs/retargeting_profiles/<method>_<robot_name>.yaml`; keep command limits in its `teleoperation` section.
 5. Reuse or add method-level optimizer defaults under `configs/retargeting_methods/`.
 
 Avoid hard-coding robot-specific joint names, link names, URDF paths, or initial poses in core Python modules.
@@ -320,13 +321,13 @@ python -c "import retargeting; import retargeting_ros"
 Check Hydra replay config composition without starting the viewer:
 
 ```bash
-python -c "from retargeting.viser_retargeting_visualize import compose_hydra_replay_config; cfg = compose_hydra_replay_config(['retargeting_profiles=vector_wrist_joint_panda_shadow','solvers=scipy_slsqp','viewer.port=8090']); print(cfg['profile']['name'], cfg['solver']['name'], cfg['viewer']['port'])"
+python -c "from retargeting.apps.viser_retargeting_visualize import compose_hydra_replay_config; cfg = compose_hydra_replay_config(['retargeting_profiles=vector_wrist_joint_panda_shadow','solvers=scipy_slsqp','viewer.port=8090']); print(cfg['profile']['name'], cfg['solver']['name'], cfg['viewer']['port'])"
 ```
 
 Check Hydra offline retarget config composition:
 
 ```bash
-python -c "from retargeting.offline_retarget import compose_hydra_offline_retarget_config; cfg = compose_hydra_offline_retarget_config(['end=1','run_name=smoke']); print(cfg['data'], cfg['run_name'])"
+python -c "from retargeting.apps.offline_retarget import compose_hydra_offline_retarget_config; cfg = compose_hydra_offline_retarget_config(['end=1','run_name=smoke']); print(cfg['data'], cfg['run_name'])"
 ```
 
 Default tests should not start ROS, RViz, cameras, Vision Pro live streaming, real robots, Open3D GUI, or MuJoCo viewer.

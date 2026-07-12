@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import csv
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from retargeting.config import resolve_project_path, to_plain_config_data
-from retargeting.retargeting_replay import create_robot_replay_context_from_metadata
-from retargeting.robot_benchmark import RobotBenchmark
-from retargeting.trajectory_result import load_retargeting_trajectory, resolve_result_paths
+from retargeting.pipelines.offline_retargeting import create_robot_replay_context_from_metadata
+from retargeting.artifacts.trajectory import load_retargeting_trajectory, resolve_result_paths
+from retargeting.evaluation.robot_metrics import RobotBenchmark
 
 
 _METRIC_PLOT_SPECS = (
@@ -21,30 +20,6 @@ _METRIC_PLOT_SPECS = (
     ("orientation_error", "Fingertip Orientation", "Error (rad)", 1.0),
     ("optimization_time", "Optimization Time", "Time (ms)", 1000.0),
 )
-
-def compose_hydra_benchmark_config(overrides: list[str] | None = None) -> dict[str, Any]:
-    """Compose the benchmark app config with Hydra.
-
-    Args:
-        overrides: Hydra override strings supplied after the module name.
-
-    Returns:
-        Resolved plain dictionary containing result and output settings.
-    """
-    try:
-        import hydra
-        from omegaconf import OmegaConf
-    except ModuleNotFoundError as exc:
-        raise SystemExit(
-            "hydra-core is required for the benchmark entrypoint. "
-            "Install the project dependencies, for example with `pip install -e .`."
-        ) from exc
-
-    config_dir = resolve_project_path("configs")
-    with hydra.initialize_config_dir(version_base=None, config_dir=str(config_dir)):
-        config = hydra.compose(config_name="benchmark", overrides=list(overrides or []))
-    return OmegaConf.to_container(config, resolve=True)
-
 
 def optimization_time_from_errors(errors: dict[str, np.ndarray], n_frames: int) -> np.ndarray:
     """Extract per-frame optimization time from saved trajectory errors.
@@ -310,23 +285,3 @@ def run_benchmark_from_config(config: Any) -> tuple[Path, Path | None]:
         write_metric_plots(metrics, plot_output_dir, result_label=runtime_name_from_result(result))
         return benchmark_output_dir, plot_output_dir
     return benchmark_output_dir, None
-
-
-def main(argv: list[str] | None = None) -> None:
-    """Run the benchmark CLI.
-
-    Args:
-        argv: Optional command-line arguments after the module name.
-
-    Returns:
-        None.
-    """
-    argv = sys.argv[1:] if argv is None else list(argv)
-    benchmark_output_dir, plot_output_dir = run_benchmark_from_config(compose_hydra_benchmark_config(argv))
-    print(f"Saved benchmark summary to {benchmark_output_dir}")
-    if plot_output_dir is not None:
-        print(f"Saved benchmark plots to {plot_output_dir}")
-
-
-if __name__ == "__main__":
-    main()

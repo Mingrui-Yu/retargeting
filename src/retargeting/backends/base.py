@@ -11,7 +11,15 @@ class RobotBackend(Protocol):
     def get_joint_pos(self) -> np.ndarray:
         ...
 
-    def command_joint_pos(self, qpos: np.ndarray) -> None:
+    def ctrl_joint_pos(self, qpos: np.ndarray) -> None:
+        """Command a target joint configuration using the shared runtime convention.
+
+        Args:
+            qpos: Target joint configuration in backend joint order.
+
+        Returns:
+            None.
+        """
         ...
 
     def step(self) -> None:

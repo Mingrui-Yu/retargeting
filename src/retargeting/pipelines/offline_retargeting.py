@@ -9,7 +9,7 @@ from retargeting.config import (
     RetargetingConfig,
     RetargetingProfileConfig,
     RobotConfig,
-    RobotTeleoperationConfig,
+    RetargetingRuntimeConfig,
     SolverConfig,
     TeleoperationModeConfig,
     default_solver_config,
@@ -21,13 +21,13 @@ from retargeting.config import (
     load_teleoperation_mode_config,
     to_plain_config_data,
 )
-from retargeting.offline_replay import OfflineReplay, iter_frame_indices, load_offline_replay
-from retargeting.robot_adaptor import RobotAdaptor
-from retargeting.robot_pinocchio import RobotPinocchio
-from retargeting.trajectory_result import RetargetingRunMetadata, RetargetingTrajectory
+from retargeting.inputs.offline_avp_replay import OfflineReplay, iter_frame_indices, load_offline_replay
+from retargeting.artifacts.trajectory import RetargetingRunMetadata, RetargetingTrajectory
+from retargeting.core.kinematics.adaptor import RobotAdaptor
+from retargeting.core.kinematics.pinocchio_model import RobotPinocchio
 from scipy.spatial.transform import Rotation as sciR
 from retargeting.utils.utils_calc import posRotMat2Isometry3d, transformPositions
-from retargeting.avp_detector import parse_avp_stream_frame
+from retargeting.inputs.avp import parse_avp_stream_frame
 
 
 DEFAULT_RETARGETING_PROFILE_CONFIG_PATH = "configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"
@@ -51,7 +51,7 @@ class RobotReplayContext:
     wrist_frame_name: str
     human_hand_scale: float
     benchmark_config: RobotBenchmarkConfig
-    teleoperation_config: RobotTeleoperationConfig
+    retargeting_runtime_config: RetargetingRuntimeConfig
     detection_source_config: DetectionSourceConfig
     retargeting_profile_config: RetargetingProfileConfig
 
@@ -171,7 +171,7 @@ def create_robot_replay_context_from_config(
         wrist_frame_name=robot_config.wrist_frame_name,
         human_hand_scale=robot_config.human_hand_scale,
         benchmark_config=robot_config.benchmark,
-        teleoperation_config=retargeting_profile_config.teleoperation,
+        retargeting_runtime_config=retargeting_profile_config.retargeting,
         detection_source_config=detection_source_config,
         retargeting_profile_config=retargeting_profile_config,
     )
@@ -242,14 +242,13 @@ def create_retargeter(
     teleoperation_mode_config: TeleoperationModeConfig | None = None,
     solver_config: SolverConfig | None = None,
 ):
-    from retargeting.robot_teleoperation import RobotTeleoperation
+    from teleoperation.session import TeleoperationSession
 
     if teleoperation_mode_config is None:
         teleoperation_mode_config = load_teleoperation_mode_config(None)
 
-    return RobotTeleoperation(
+    return TeleoperationSession(
         robot_adaptor=context.robot_adaptor,
-        robot_control=None,
         robot_config=context.robot_config,
         profile_config=context.retargeting_profile_config,
         method_config=method_config,
