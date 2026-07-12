@@ -19,6 +19,12 @@ It provides:
   <img src="./docs/overview.jpg" alt="retargeting" width="50%" />
 </div>
 
+## What's New
+
+**2026-07-13** — The codebase has been comprehensively **reorganized** with clearer boundaries between the retargeting core, runtime adapters, configuration, and applications. The new structure also makes quick offline replay easier to discover and run.
+
+We welcome reproductions of this work and use of this codebase as a baseline. Please open an issue with any questions; we will address them and update the repository promptly.
+
 ## Repository Layout
 
 | Path | Purpose |
