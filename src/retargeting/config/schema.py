@@ -801,6 +801,8 @@ class ViewerConfig:
     no_robot_mesh: bool = False
     trail_length: int = 120
     human_keypoint_size: float = 0.018
+    initial_camera_position: tuple[float, float, float] = (1.5, 1.5, 1.2)
+    initial_camera_look_at: tuple[float, float, float] = (0.0, 0.0, 0.45)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> "ViewerConfig":
@@ -811,6 +813,8 @@ class ViewerConfig:
             no_robot_mesh=bool(data.get("no_robot_mesh", False)),
             trail_length=int(data.get("trail_length", 120)),
             human_keypoint_size=float(data.get("human_keypoint_size", 0.018)),
+            initial_camera_position=tuple(float(value) for value in data.get("initial_camera_position", (1.5, 1.5, 1.2))),
+            initial_camera_look_at=tuple(float(value) for value in data.get("initial_camera_look_at", (0.0, 0.0, 0.45))),
         )
 
 

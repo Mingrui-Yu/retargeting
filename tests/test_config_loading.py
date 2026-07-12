@@ -204,6 +204,37 @@ def test_offline_retarget_config_accepts_post_action_overrides():
     assert config["teleoperation_mode"]["name"] == "simulation"
 
 
+def test_offline_retarget_post_actions_reuse_standalone_app_defaults():
+    """Verify post actions inherit their standalone app configuration defaults.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    from retargeting.main import compose_hydra_base_config
+
+    config = compose_hydra_base_config(["app=offline_retarget", "output_root=/tmp/offline-output"])
+    benchmark_post = config["post"]["benchmark"]
+    replay_post = config["post"]["visualize"]
+
+    assert benchmark_post["output_root"] == "/tmp/offline-output"
+    assert benchmark_post["output_dir"] is None
+    assert benchmark_post["plot"] is True
+    assert benchmark_post["plot_root"] == "/tmp/offline-output"
+    assert benchmark_post["plot_dir"] is None
+    assert replay_post["viewer"] == {
+        "fps": 20.0,
+        "port": 9218,
+        "no_robot_mesh": False,
+        "trail_length": 120,
+        "human_keypoint_size": 0.005,
+        "initial_camera_position": [0.6, 0.6, 0.5],
+        "initial_camera_look_at": [0.0, 0.0, 0.45],
+    }
+
+
 def test_replay_app_config_loads_defaults():
     from retargeting.main import compose_hydra_base_config
 
@@ -217,6 +248,8 @@ def test_replay_app_config_loads_defaults():
     assert isinstance(config["viewer"]["port"], int)
     assert config["viewer"]["port"] > 0
     assert config["viewer"]["human_keypoint_size"] == 0.005
+    assert config["viewer"]["initial_camera_position"] == [0.6, 0.6, 0.5]
+    assert config["viewer"]["initial_camera_look_at"] == [0.0, 0.0, 0.45]
 
 
 def test_base_config_selects_each_whitelisted_app():
@@ -270,6 +303,8 @@ def test_replay_hydra_style_mapping_resolves_runtime_options():
             "no_robot_mesh": True,
             "trail_length": 10,
             "human_keypoint_size": 0.012,
+            "initial_camera_position": [1.0, 1.5, 2.0],
+            "initial_camera_look_at": [0.0, 0.0, 0.5],
         },
     }
 
@@ -279,6 +314,8 @@ def test_replay_hydra_style_mapping_resolves_runtime_options():
     assert options["port"] == 8090
     assert options["no_robot_mesh"] is True
     assert options["human_keypoint_size"] == 0.012
+    assert options["initial_camera_position"] == (1.0, 1.5, 2.0)
+    assert options["initial_camera_look_at"] == (0.0, 0.0, 0.5)
 
 
 def test_replay_config_requires_a_saved_artifact():

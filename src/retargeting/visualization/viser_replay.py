@@ -155,6 +155,22 @@ def render_frame(
     return handles
 
 
+def configure_initial_camera(server: Any, position: tuple[float, float, float], look_at: tuple[float, float, float]) -> None:
+    """Configure Viser's initial and reset-view camera pose.
+
+    Args:
+        server: Viser server whose initial camera should be configured.
+        position: Three-dimensional camera position in Viser world coordinates.
+        look_at: Three-dimensional point that the camera initially targets.
+
+    Returns:
+        None.
+    """
+    # Viser applies this pose to new clients and uses it for the Reset View action.
+    server.initial_camera.position = position
+    server.initial_camera.look_at = look_at
+
+
 
 def run_replay_viewer(options: dict[str, Any]) -> None:
     """Play one saved retargeting artifact in the Viser viewer.
@@ -182,6 +198,11 @@ def run_replay_viewer(options: dict[str, Any]) -> None:
     frames = trajectory_to_replay_frames(context, trajectory)
 
     server = viser.ViserServer(port=options["port"])
+    configure_initial_camera(
+        server,
+        position=options["initial_camera_position"],
+        look_at=options["initial_camera_look_at"],
+    )
     print(f"Viser server started on port {options['port']}. Loaded {len(frames)} frames.")
 
     robot_urdf = None

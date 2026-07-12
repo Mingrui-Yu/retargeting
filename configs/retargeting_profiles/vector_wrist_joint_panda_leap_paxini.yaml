@@ -105,4 +105,6 @@ teleoperation:
     - 1.0
     - 1.0
     - 1.0
-joint_limit_overrides: []
+joint_limit_overrides:
+  - indices: [9, 10, 13, 14, 17, 18]
+    lower: 0.0

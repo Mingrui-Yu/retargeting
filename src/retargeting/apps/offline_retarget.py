@@ -125,6 +125,8 @@ def build_post_visualize_config(
             "no_robot_mesh": bool(viewer_data.get("no_robot_mesh", False)),
             "trail_length": int(viewer_data.get("trail_length", 120)),
             "human_keypoint_size": float(viewer_data.get("human_keypoint_size", 0.018)),
+            "initial_camera_position": viewer_data.get("initial_camera_position", [1.5, 1.5, 1.2]),
+            "initial_camera_look_at": viewer_data.get("initial_camera_look_at", [0.0, 0.0, 0.45]),
         },
     }
 

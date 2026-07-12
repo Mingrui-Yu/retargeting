@@ -92,6 +92,8 @@ def test_offline_retarget_post_actions_build_followup_configs(tmp_path, monkeypa
                         "no_robot_mesh": True,
                         "trail_length": 10,
                         "human_keypoint_size": 0.012,
+                        "initial_camera_position": [1.0, 1.5, 2.0],
+                        "initial_camera_look_at": [0.0, 0.0, 0.5],
                     },
                 },
             },
@@ -108,6 +110,8 @@ def test_offline_retarget_post_actions_build_followup_configs(tmp_path, monkeypa
     assert recorded["visualize"]["viewer"]["port"] == 9321
     assert recorded["visualize"]["viewer"]["no_robot_mesh"] is True
     assert recorded["visualize"]["viewer"]["human_keypoint_size"] == 0.012
+    assert recorded["visualize"]["viewer"]["initial_camera_position"] == [1.0, 1.5, 2.0]
+    assert recorded["visualize"]["viewer"]["initial_camera_look_at"] == [0.0, 0.0, 0.5]
 
 
 def test_offline_retargeting_result_artifact_round_trip(tmp_path):

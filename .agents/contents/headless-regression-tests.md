@@ -8,6 +8,7 @@ The focused offline regression file is `tests/test_replay_smoke.py`. It currentl
 - the promoted 760-frame AVP fixture `tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz` and its first recorded `retarget_qpos`;
 - static `AvpDetector.detect()` parsing with a fake live AVP dependency;
 - configured Panda+Leap URDF loading and `RobotAdaptor` qpos/Jacobian mappings;
+- Panda+Leap profile lower-bound overrides reaching both the optimizer and its solver;
 - one `VectorWristJointOptimizer.retarget()` call for each supported SLSQP backend: NLopt and SciPy.
 
 Focused command:
@@ -22,4 +23,4 @@ Full headless regression command:
 /home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests -q
 ```
 
-The baseline verified on 2026-07-13 is 7 focused tests and 57 tests in the full suite. Update this document when the intended test scope changes; optional dependencies should produce explicit skips rather than a behavior change.
+The baseline verified on 2026-07-13 is 8 focused tests and 59 tests in the full suite. Update this document when the intended test scope changes; optional dependencies should produce explicit skips rather than a behavior change.
