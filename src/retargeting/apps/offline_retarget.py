@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-import sys
+if __name__ == "__main__":
+    raise SystemExit("Use `python -m retargeting.main app=offline_retarget` instead.")
+
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -17,30 +19,6 @@ from retargeting.config import (
 )
 from retargeting.pipelines.offline_retargeting import DEFAULT_DETECTION_SOURCE_CONFIG_PATH, run_offline_retargeting
 from retargeting.artifacts.trajectory import save_retargeting_trajectory
-
-
-def compose_hydra_offline_retarget_config(overrides: list[str] | None = None) -> dict[str, Any]:
-    """Compose the offline retarget app config with Hydra.
-
-    Args:
-        overrides: Hydra override strings supplied after the module name.
-
-    Returns:
-        Resolved plain dictionary containing app, robot, retargeting, and output settings.
-    """
-    try:
-        import hydra
-        from omegaconf import OmegaConf
-    except ModuleNotFoundError as exc:
-        raise SystemExit(
-            "hydra-core is required for the offline retarget entrypoint. "
-            "Install the project dependencies, for example with `pip install -e .`."
-        ) from exc
-
-    config_dir = resolve_project_path("configs")
-    with hydra.initialize_config_dir(version_base=None, config_dir=str(config_dir)):
-        config = hydra.compose(config_name="offline_retarget", overrides=list(overrides or []))
-    return OmegaConf.to_container(config, resolve=True)
 
 
 def _default_run_name(robot_name: str, retargeting_type: str) -> str:
@@ -108,7 +86,8 @@ def build_post_benchmark_config(config_data: dict[str, Any], output_dir: Path) -
         benchmark_data = {}
     output_root = benchmark_data.get("output_root", config_data.get("output_root", "outputs"))
     return {
-        "result": str(output_dir),
+        "run_name": output_dir.parent.name,
+        "runtime_root": str(output_dir.parent.parent),
         "output_root": output_root,
         "output_dir": benchmark_data.get("output_dir"),
         "plot": bool(benchmark_data.get("plot", True)),
@@ -120,16 +99,12 @@ def build_post_benchmark_config(config_data: dict[str, Any], output_dir: Path) -
 def build_post_visualize_config(
     config_data: dict[str, Any],
     output_dir: Path,
-    profile_source: Any,
-    solver_source: Any,
 ) -> dict[str, Any]:
     """Build the replay viewer config used after offline retargeting.
 
     Args:
         config_data: Plain composed offline retarget config.
         output_dir: Directory containing the just-saved retargeting artifact.
-        profile_source: Retargeting profile config source already used for retargeting.
-        solver_source: Solver config source already used for retargeting.
 
     Returns:
         Plain replay config consumed by `resolve_replay_options_from_config`.
@@ -142,21 +117,14 @@ def build_post_visualize_config(
     if not isinstance(viewer_data, dict):
         viewer_data = {}
     return {
-        "result": str(output_dir),
-        "data": config_data.get("data"),
-        "detection_source": config_data.get(
-            "detection_source", config_data.get("app", {}).get("detection_source", DEFAULT_DETECTION_SOURCE_CONFIG_PATH)
-        ),
-        "start": int(config_data.get("start", 0)),
-        "end": int(config_data.get("end", -1)),
-        "stride": int(config_data.get("stride", 1)),
-        "profile": profile_source,
-        "solver": solver_source,
+        "run_name": output_dir.parent.name,
+        "runtime_root": str(output_dir.parent.parent),
         "viewer": {
             "fps": float(viewer_data.get("fps", 20.0)),
             "port": int(viewer_data.get("port", 9217)),
             "no_robot_mesh": bool(viewer_data.get("no_robot_mesh", False)),
             "trail_length": int(viewer_data.get("trail_length", 120)),
+            "human_keypoint_size": float(viewer_data.get("human_keypoint_size", 0.018)),
         },
     }
 
@@ -165,7 +133,7 @@ def run_benchmark_post_action(config: dict[str, Any]) -> tuple[Path, Path | None
     """Run the benchmark post action.
 
     Args:
-        config: Plain benchmark config with `result` pointing at a saved artifact.
+        config: Plain benchmark config with a runtime name identifying a saved artifact.
 
     Returns:
         Tuple of benchmark output directory and optional plot output directory.
@@ -179,7 +147,7 @@ def run_visualize_post_action(config: dict[str, Any]) -> None:
     """Run the replay viewer post action.
 
     Args:
-        config: Plain replay config with `result` pointing at a saved artifact.
+        config: Plain replay config with a runtime name identifying a saved artifact.
 
     Returns:
         None. The viewer runs until interrupted.
@@ -193,16 +161,12 @@ def run_visualize_post_action(config: dict[str, Any]) -> None:
 def run_post_retarget_actions(
     config_data: dict[str, Any],
     output_dir: Path,
-    profile_source: Any,
-    solver_source: Any | None = None,
 ) -> list[str]:
     """Run enabled offline retarget post actions.
 
     Args:
         config_data: Plain composed offline retarget config.
         output_dir: Directory containing the just-saved retargeting artifact.
-        profile_source: Retargeting profile config source already used for retargeting.
-        solver_source: Solver config source already used for retargeting.
 
     Returns:
         Names of post actions that were started.
@@ -219,9 +183,7 @@ def run_post_retarget_actions(
 
     if _post_action_enabled(config_data, "visualize"):
         print(f"Starting replay viewer for {output_dir}")
-        run_visualize_post_action(
-            build_post_visualize_config(config_data, output_dir, profile_source, solver_source)
-        )
+        run_visualize_post_action(build_post_visualize_config(config_data, output_dir))
         completed_actions.append("visualize")
 
     return completed_actions
@@ -272,26 +234,8 @@ def run_offline_retarget_from_config(config: Any, argv: list[str] | None = None)
         teleoperation_mode_config=teleoperation_mode_config,
         solver_config=solver_config,
     )
-    metadata.command = ["python", "-m", "retargeting.apps.offline_retarget", *(argv or [])]
+    metadata.command = ["python", "-m", "retargeting.main", *(argv or [])]
     output_dir = resolve_output_dir(config_data, robot_config.name, retargeting_config.type)
     output_dir = save_retargeting_trajectory(output_dir, trajectory, metadata)
-    run_post_retarget_actions(config_data, output_dir, profile_source, solver_source)
+    run_post_retarget_actions(config_data, output_dir)
     return output_dir
-
-
-def main(argv: list[str] | None = None) -> None:
-    """Run the offline retarget CLI.
-
-    Args:
-        argv: Optional command-line arguments after the module name.
-
-    Returns:
-        None.
-    """
-    argv = sys.argv[1:] if argv is None else list(argv)
-    output_dir = run_offline_retarget_from_config(compose_hydra_offline_retarget_config(argv), argv=argv)
-    print(f"Saved retargeting result to {output_dir}")
-
-
-if __name__ == "__main__":
-    main()

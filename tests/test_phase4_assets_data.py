@@ -104,15 +104,13 @@ def test_robot_asset_component_symlinks_target_shared_meshes():
         assert link_path.resolve() == target_path.resolve()
 
 
-def test_replay_app_uses_promoted_fixture_not_data_output_tree():
-    from retargeting.config import load_replay_app_config
+def test_replay_app_requires_a_saved_artifact_not_raw_input_data():
+    from retargeting.main import compose_hydra_base_config
 
-    app_config = load_replay_app_config("configs/apps/replay_avp.yaml")
-
-    assert app_config.data == "tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz"
-    assert app_config.detection_source == "configs/detection_sources/avp.yaml"
-    assert Path(app_config.data).is_file()
-    assert not app_config.data.startswith("data/")
+    config = compose_hydra_base_config(["app=replay"])
+    assert config["run_name"] is None
+    assert "data" not in config
+    assert "detection_source" not in config
 
 
 def test_gitignore_covers_phase4_outputs():

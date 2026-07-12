@@ -3,7 +3,7 @@ import pdb
 
 import numpy as np
 from scipy.spatial.transform import Rotation as sciR
-from retargeting.utils.utils_mano import OPERATOR2MANO_LEFT, OPERATOR2MANO_RIGHT
+from mr_utils.utils_mano import OPERATOR2MANO_LEFT, OPERATOR2MANO_RIGHT
 
 
 def parse_avp_stream_frame(r):

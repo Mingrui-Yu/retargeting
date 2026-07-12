@@ -14,7 +14,11 @@ dependencies = [
     "numpy",
     "PyYAML>=6.0",
     "scipy",
+    "tqdm",
 ]
+
+[project.scripts]
+retargeting = "retargeting.main:main"
 
 [project.optional-dependencies]
 avp = [
@@ -36,8 +40,9 @@ vision = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["src"]
-include = ["retargeting*", "retargeting_ros*"]
+# Install the pinned utils_python submodule as the top-level ``mr_utils`` package.
+where = ["src", "third_party/utils_python"]
+include = ["retargeting*", "retargeting_ros*", "teleoperation*", "mr_utils*"]
 
 # https://black.readthedocs.io/en/stable/the_black_code_style/current_style.html
 [tool.black]

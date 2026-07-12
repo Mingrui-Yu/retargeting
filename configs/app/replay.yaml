@@ -1,0 +1,12 @@
+# @package _global_
+app:
+  id: replay
+
+run_name: null
+runtime_root: outputs
+viewer:
+  fps: 20.0
+  port: 9218
+  no_robot_mesh: false
+  trail_length: 120
+  human_keypoint_size: 0.005

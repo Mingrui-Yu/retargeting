@@ -26,17 +26,13 @@ from retargeting.artifacts.trajectory import RetargetingRunMetadata, Retargeting
 from retargeting.core.kinematics.adaptor import RobotAdaptor
 from retargeting.core.kinematics.pinocchio_model import RobotPinocchio
 from scipy.spatial.transform import Rotation as sciR
-from retargeting.utils.utils_calc import posRotMat2Isometry3d, transformPositions
+from tqdm.auto import tqdm
+from mr_utils.utils_calc import posRotMat2Isometry3d, transformPositions
 from retargeting.inputs.avp import parse_avp_stream_frame
 
 
 DEFAULT_RETARGETING_PROFILE_CONFIG_PATH = "configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"
 DEFAULT_DETECTION_SOURCE_CONFIG_PATH = "configs/detection_sources/avp.yaml"
-DEFAULT_PROFILE_CONFIG_PATHS_BY_ROBOT_NAME = {
-    "panda_leap_paxini": DEFAULT_RETARGETING_PROFILE_CONFIG_PATH,
-    "panda_shadow": "configs/retargeting_profiles/vector_wrist_joint_panda_shadow.yaml",
-}
-
 
 @dataclass
 class RobotReplayContext:
@@ -189,11 +185,11 @@ def create_robot_replay_context_from_metadata(metadata: RetargetingRunMetadata) 
     robot_config = load_robot_config(metadata.robot_config)
     profile_source = metadata.extra.get("retargeting_profile_config")
     if profile_source is None:
-        profile_source = DEFAULT_PROFILE_CONFIG_PATHS_BY_ROBOT_NAME.get(robot_config.name)
-        if profile_source is None:
-            raise ValueError(f"No default retargeting profile configured for robot: {robot_config.name}")
+        raise ValueError("Saved artifact metadata is missing retargeting_profile_config.")
     profile_config = load_retargeting_profile_config(profile_source)
-    detection_source = metadata.extra.get("detection_source_config", DEFAULT_DETECTION_SOURCE_CONFIG_PATH)
+    detection_source = metadata.extra.get("detection_source_config")
+    if detection_source is None:
+        raise ValueError("Saved artifact metadata is missing detection_source_config.")
     detection_source_config = load_detection_source_config(detection_source)
     return create_robot_replay_context_from_config(robot_config, profile_config, detection_source_config)
 
@@ -421,7 +417,7 @@ def run_offline_retargeting(
     retargeter.set_detection_source_init_wrist_pose(init_detection_wrist_pose)
 
     frames: List[RetargetReplayFrame] = []
-    for frame_idx in frame_indices:
+    for frame_idx in tqdm(frame_indices, desc="Retargeting", unit="frame"):
         observation, qpos, err = retargeter.retarget_input(replay.streams[frame_idx])
         if observation is None:
             continue
@@ -459,63 +455,3 @@ def run_offline_retargeting(
         },
     )
     return context, trajectory, metadata
-
-
-def build_retarget_replay_frames(
-    data_file: str,
-    start: int = 0,
-    end: int = -1,
-    stride: int = 1,
-    robot_config: RobotConfig | None = None,
-    retargeting_config: RetargetingConfig | None = None,
-    retargeting_profile_config: RetargetingProfileConfig | None = None,
-    detection_source_config: DetectionSourceConfig | None = None,
-    teleoperation_mode_config: TeleoperationModeConfig | None = None,
-    solver_config: SolverConfig | None = None,
-    robot_config_path: str | Path | None = None,
-    retargeting_config_path: str | Path | None = None,
-    retargeting_profile_config_path: str | Path | None = None,
-    detection_source_config_path: str | Path | None = None,
-    teleoperation_mode_config_path: str | Path | None = None,
-) -> tuple[RobotReplayContext, List[RetargetReplayFrame]]:
-    """Build viewer replay frames by running offline retargeting.
-
-    Args:
-        data_file: Offline AVP replay file.
-        start: First input frame index.
-        end: Last input frame index, inclusive; negative means the final frame.
-        stride: Frame stride.
-        robot_config: Optional already-loaded robot config.
-        retargeting_config: Optional already-loaded retargeting method config.
-        retargeting_profile_config: Optional already-loaded retargeting profile config.
-        detection_source_config: Optional already-loaded detection source config.
-        teleoperation_mode_config: Optional already-loaded teleoperation runtime mode config.
-        solver_config: Optional already-loaded solver config.
-        robot_config_path: Optional robot config path.
-        retargeting_config_path: Optional retargeting method config path.
-        retargeting_profile_config_path: Optional retargeting profile config path.
-        detection_source_config_path: Optional detection source config path.
-        teleoperation_mode_config_path: Optional teleoperation runtime mode config path.
-
-    Returns:
-        Tuple of robot replay context and replay frames suitable for visualization.
-    """
-    context, trajectory, _ = run_offline_retargeting(
-        data_file=data_file,
-        start=start,
-        end=end,
-        stride=stride,
-        robot_config=robot_config,
-        retargeting_config=retargeting_config,
-        retargeting_profile_config=retargeting_profile_config,
-        detection_source_config=detection_source_config,
-        teleoperation_mode_config=teleoperation_mode_config,
-        solver_config=solver_config,
-        robot_config_path=robot_config_path,
-        retargeting_config_path=retargeting_config_path,
-        retargeting_profile_config_path=retargeting_profile_config_path,
-        detection_source_config_path=detection_source_config_path,
-        teleoperation_mode_config_path=teleoperation_mode_config_path,
-    )
-    frames = trajectory_to_replay_frames(context, trajectory)
-    return context, frames

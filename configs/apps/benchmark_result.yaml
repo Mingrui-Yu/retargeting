@@ -1,7 +1,0 @@
-# @package app
-result: null
-output_root: outputs
-output_dir: null
-plot: true
-plot_root: outputs
-plot_dir: null

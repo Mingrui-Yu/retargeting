@@ -11,6 +11,7 @@ def _np():
 
 
 def test_runtime_output_layout_defaults(tmp_path):
+    from retargeting.artifacts.trajectory import resolve_runtime_result_dir
     from retargeting.pipelines.benchmark_report import resolve_benchmark_output_dirs, runtime_name_from_result
     from retargeting.apps.offline_retarget import resolve_output_dir
 
@@ -28,6 +29,14 @@ def test_runtime_output_layout_defaults(tmp_path):
     assert benchmark_dir == tmp_path / "outputs" / "smoke" / "benchmark"
     assert plot_dir == tmp_path / "outputs" / "smoke" / "plots"
     assert runtime_name_from_result(retarget_dir / "result.npz") == "smoke"
+    assert resolve_runtime_result_dir("smoke", tmp_path / "outputs") == retarget_dir
+
+
+def test_runtime_result_dir_rejects_paths_as_run_names():
+    from retargeting.artifacts.trajectory import resolve_runtime_result_dir
+
+    with pytest.raises(ValueError, match="single directory name"):
+        resolve_runtime_result_dir("outputs/smoke/retargeting")
 
 
 def test_offline_retarget_post_actions_build_followup_configs(tmp_path, monkeypatch):
@@ -82,24 +91,23 @@ def test_offline_retarget_post_actions_build_followup_configs(tmp_path, monkeypa
                         "port": 9321,
                         "no_robot_mesh": True,
                         "trail_length": 10,
+                        "human_keypoint_size": 0.012,
                     },
                 },
             },
         },
         output_dir,
-        profile_source="configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml",
-        solver_source="configs/solvers/nlopt_slsqp.yaml",
     )
 
     assert actions == ["benchmark", "visualize"]
-    assert recorded["benchmark"]["result"] == str(output_dir)
+    assert recorded["benchmark"]["run_name"] == "quickstart_leap"
+    assert recorded["benchmark"]["runtime_root"] == str(tmp_path / "outputs")
     assert recorded["benchmark"]["plot"] is False
-    assert recorded["visualize"]["result"] == str(output_dir)
-    assert recorded["visualize"]["profile"] == "configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"
-    assert recorded["visualize"]["detection_source"] == "configs/detection_sources/avp.yaml"
-    assert recorded["visualize"]["solver"] == "configs/solvers/nlopt_slsqp.yaml"
+    assert recorded["visualize"]["run_name"] == "quickstart_leap"
+    assert recorded["visualize"]["runtime_root"] == str(tmp_path / "outputs")
     assert recorded["visualize"]["viewer"]["port"] == 9321
     assert recorded["visualize"]["viewer"]["no_robot_mesh"] is True
+    assert recorded["visualize"]["viewer"]["human_keypoint_size"] == 0.012
 
 
 def test_offline_retargeting_result_artifact_round_trip(tmp_path):
@@ -140,6 +148,11 @@ def test_offline_retargeting_result_artifact_round_trip(tmp_path):
     assert frames[0].qpos.shape == (context.robot_adaptor.doa,)
     assert np.isfinite(frames[0].hand_keypoints_world).all()
 
+    from dataclasses import replace
+
+    with pytest.raises(ValueError, match="missing retargeting_profile_config"):
+        create_robot_replay_context_from_metadata(replace(loaded_metadata, extra={}))
+
 
 def test_benchmark_summary_from_saved_result(tmp_path):
     np = _np()
@@ -159,13 +172,15 @@ def test_benchmark_summary_from_saved_result(tmp_path):
         end=1,
         stride=1,
     )
-    result_dir = save_retargeting_trajectory(tmp_path / "result_run", trajectory, metadata)
+    runtime_root = tmp_path / "outputs"
+    result_dir = save_retargeting_trajectory(runtime_root / "result_run" / "retargeting", trajectory, metadata)
 
     metrics = compute_benchmark_metrics(result_dir)
     summary = summarize_metrics(metrics)
     benchmark_output_dir, plot_output_dir = run_benchmark_from_config(
         {
-            "result": str(result_dir),
+            "run_name": "result_run",
+            "runtime_root": str(runtime_root),
             "output_dir": str(tmp_path / "benchmark"),
             "plot": False,
         }

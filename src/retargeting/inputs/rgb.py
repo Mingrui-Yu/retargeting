@@ -9,8 +9,8 @@ import numpy as np
 import cv2
 from scipy.spatial.transform import Rotation as sciR
 
-from retargeting.utils.utils_calc import batchPosRotVec2Isometry3d
-from retargeting.utils.utils_mano import (
+from mr_utils.utils_calc import batchPosRotVec2Isometry3d
+from mr_utils.utils_mano import (
     OPERATOR2MANO_RIGHT,
     OPERATOR2MANO_LEFT,
     estimate_frame_from_hand_points,

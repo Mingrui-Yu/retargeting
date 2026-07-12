@@ -9,7 +9,7 @@ from urllib.parse import quote, unquote
 import numpy as np
 import yaml
 
-from retargeting.config import to_plain_config_data
+from retargeting.config import resolve_project_path, to_plain_config_data
 
 
 RESULT_SCHEMA_VERSION = 1
@@ -17,6 +17,24 @@ RESULT_FILE_NAME = "result.npz"
 METADATA_FILE_NAME = "metadata.yaml"
 ROBOT_FRAME_POSE_PREFIX = "robot_frame_pose__"
 ERROR_PREFIX = "err__"
+
+
+def resolve_runtime_result_dir(run_name: str, runtime_root: str | Path = "outputs") -> Path:
+    """Resolve one standard-layout runtime name to its retargeting artifact directory.
+
+    Args:
+        run_name: Single runtime directory name created by ``app=offline_retarget``.
+        runtime_root: Root directory containing runtime directories.
+
+    Returns:
+        Directory containing the runtime's ``result.npz`` and ``metadata.yaml`` files.
+    """
+    if not isinstance(run_name, str) or not run_name.strip():
+        raise ValueError("run_name must be a non-empty runtime directory name.")
+    runtime_path = Path(run_name)
+    if runtime_path.name != run_name or run_name in {".", ".."}:
+        raise ValueError("run_name must be a single directory name, not a path.")
+    return resolve_project_path(runtime_root) / run_name / "retargeting"
 
 
 @dataclass

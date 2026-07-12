@@ -20,7 +20,7 @@ from retargeting.core.types import RetargetingResult
 from retargeting.inputs import HandObservation
 from retargeting.core.optimizers import get_optimizer_class
 from retargeting.core.kinematics.adaptor import RobotAdaptor
-from retargeting.utils.utils_calc import quatXYZW2WXYZ, sciR, transformPositions
+from mr_utils.utils_calc import quatXYZW2WXYZ, sciR, transformPositions
 
 
 def sigmoid(x: np.ndarray, c: float = 0.0, w: float = 1.0) -> np.ndarray:

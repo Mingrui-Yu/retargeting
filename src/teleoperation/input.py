@@ -9,7 +9,7 @@ import numpy as np
 
 from retargeting.config import DetectionSourceConfig
 from retargeting.inputs import HandObservation
-from retargeting.utils.utils_calc import posRotMat2Isometry3d, sciR
+from mr_utils.utils_calc import posRotMat2Isometry3d, sciR
 
 try:
     import cv2

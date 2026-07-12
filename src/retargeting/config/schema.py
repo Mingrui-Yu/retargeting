@@ -800,6 +800,7 @@ class ViewerConfig:
     port: int = 8080
     no_robot_mesh: bool = False
     trail_length: int = 120
+    human_keypoint_size: float = 0.018
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> "ViewerConfig":
@@ -809,32 +810,21 @@ class ViewerConfig:
             port=int(data.get("port", 8080)),
             no_robot_mesh=bool(data.get("no_robot_mesh", False)),
             trail_length=int(data.get("trail_length", 120)),
+            human_keypoint_size=float(data.get("human_keypoint_size", 0.018)),
         )
 
 
 @dataclass(frozen=True)
 class ReplayAppConfig:
-    data: str
-    result: str | None
-    profile: str
-    detection_source: str
-    solver: str | None
-    start: int
-    end: int
-    stride: int
+    run_name: str | None
+    runtime_root: str
     viewer: ViewerConfig
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ReplayAppConfig":
         return cls(
-            data=str(data["data"]),
-            result=None if data.get("result") is None else str(data["result"]),
-            profile=str(data["profile"]),
-            detection_source=str(data["detection_source"]),
-            solver=None if data.get("solver") is None else str(data["solver"]),
-            start=int(data.get("start", 0)),
-            end=int(data.get("end", -1)),
-            stride=int(data.get("stride", 1)),
+            run_name=None if data.get("run_name") is None else str(data["run_name"]),
+            runtime_root=str(data.get("runtime_root", "outputs")),
             viewer=ViewerConfig.from_dict(data.get("viewer")),
         )
 

@@ -6,13 +6,12 @@ import numpy as np
 from retargeting.pipelines.offline_retargeting import (
     RetargetReplayFrame,
     RobotReplayContext,
-    build_retarget_replay_frames,
     create_robot_replay_context_from_metadata,
     trajectory_to_replay_frames,
 )
 from retargeting.artifacts.trajectory import load_retargeting_trajectory
 from scipy.spatial.transform import Rotation as sciR
-from retargeting.utils.utils_mano import MANO_FINGERTIP_INDEX, MANO_LINE_PAIRS, MANO_POINTS_COLORS
+from mr_utils.utils_mano import MANO_FINGERTIP_INDEX, MANO_LINE_PAIRS, MANO_POINTS_COLORS
 
 
 HUMAN_COLOR = np.array([40, 180, 255], dtype=np.uint8)
@@ -126,6 +125,7 @@ def render_frame(
     frames: List[RetargetReplayFrame],
     current_idx: int,
     trail_length: int,
+    human_keypoint_size: float,
     show_human: bool,
     show_trails: bool,
 ) -> List[object]:
@@ -136,7 +136,13 @@ def render_frame(
     if show_human:
         human_colors = np.asarray(MANO_POINTS_COLORS, dtype=np.uint8)
         handles.append(
-            add_point_cloud(scene, "/current/human/keypoints", frame.hand_keypoints_world, human_colors, 0.018)
+            add_point_cloud(
+                scene,
+                "/current/human/keypoints",
+                frame.hand_keypoints_world,
+                human_colors,
+                human_keypoint_size,
+            )
         )
         handles.append(
             add_line_segments(scene, "/current/human/skeleton", human_line_segments(frame), tuple(HUMAN_COLOR), 2.0)
@@ -151,14 +157,18 @@ def render_frame(
 
 
 def run_replay_viewer(options: dict[str, Any]) -> None:
-    """Run the viser replay loop from already-resolved runtime options.
+    """Play one saved retargeting artifact in the Viser viewer.
 
     Args:
-        options: Runtime options produced by an application entrypoint.
+        options: Saved-artifact viewer options produced by an application entrypoint.
 
     Returns:
         None. This function runs until the process is interrupted.
     """
+    result = options.get("result")
+    if result is None or not str(result).strip():
+        raise ValueError("Replay viewer requires a saved offline_retarget artifact.")
+
     try:
         import viser
         from viser.extras import ViserUrdf
@@ -167,23 +177,9 @@ def run_replay_viewer(options: dict[str, Any]) -> None:
             "viser is not installed. Install it in the retargeting environment before running this viewer."
         ) from exc
 
-    if options.get("result"):
-        trajectory, metadata = load_retargeting_trajectory(options["result"])
-        context = create_robot_replay_context_from_metadata(metadata)
-        frames = trajectory_to_replay_frames(context, trajectory)
-    else:
-        context, frames = build_retarget_replay_frames(
-            data_file=options["data"],
-            start=options["start"],
-            end=options["end"],
-            stride=options["stride"],
-            robot_config=options["robot_config"],
-            retargeting_config=options["retargeting_config"],
-            retargeting_profile_config=options["retargeting_profile_config"],
-            detection_source_config=options["detection_source_config"],
-            teleoperation_mode_config=options["teleoperation_mode_config"],
-            solver_config=options["solver_config"],
-        )
+    trajectory, metadata = load_retargeting_trajectory(str(result))
+    context = create_robot_replay_context_from_metadata(metadata)
+    frames = trajectory_to_replay_frames(context, trajectory)
 
     server = viser.ViserServer(port=options["port"])
     print(f"Viser server started on port {options['port']}. Loaded {len(frames)} frames.")
@@ -237,6 +233,7 @@ def run_replay_viewer(options: dict[str, Any]) -> None:
                 frames,
                 current_idx=state[0],
                 trail_length=state[4],
+                human_keypoint_size=float(options["human_keypoint_size"]),
                 show_human=state[1],
                 show_trails=state[3],
             )

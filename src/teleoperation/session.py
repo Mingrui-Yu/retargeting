@@ -18,7 +18,7 @@ from retargeting.core import Retargeter
 from retargeting.inputs import HandObservation
 from retargeting.core.kinematics.adaptor import RobotAdaptor
 from retargeting.evaluation.robot_metrics import RobotBenchmark
-from retargeting.utils.utils_calc import transformPositions
+from mr_utils.utils_calc import transformPositions
 from teleoperation.input import HandObservationAdapter
 from teleoperation.output import QposOutputFilter
 

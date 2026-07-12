@@ -9,8 +9,8 @@ import torch
 
 from retargeting.core.optimizers.base import RetargetOptimizer, extract_solver_params
 from retargeting.core.kinematics.adaptor import RobotAdaptor
-from retargeting.utils import utils_calc as ucalc
-from retargeting.utils import utils_torch as utorch
+from mr_utils import utils_calc as ucalc
+from mr_utils import utils_torch as utorch
 
 
 def _ordered_unique(values: List[str]) -> List[str]:

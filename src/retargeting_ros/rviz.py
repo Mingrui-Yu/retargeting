@@ -1,8 +1,8 @@
 import time
 
 import numpy as np
-from retargeting.utils.utils_calc import isometry3dToPosQuat, transformPositions
-from retargeting.utils.utils_mano import MANO_LINE_PAIRS, MANO_POINTS_COLORS
+from mr_utils.utils_calc import isometry3dToPosQuat, transformPositions
+from mr_utils.utils_mano import MANO_LINE_PAIRS, MANO_POINTS_COLORS
 from retargeting_ros.messages import (
     pointPairsToLines,
     pointsToMarker,

@@ -1,1 +1,1 @@
-"""User-facing application and CLI entrypoints."""
+"""Application runners selected by :mod:`retargeting.main`."""

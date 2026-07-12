@@ -9,7 +9,7 @@ import numpy as np
 
 from retargeting.config import resolve_project_path, to_plain_config_data
 from retargeting.pipelines.offline_retargeting import create_robot_replay_context_from_metadata
-from retargeting.artifacts.trajectory import load_retargeting_trajectory, resolve_result_paths
+from retargeting.artifacts.trajectory import load_retargeting_trajectory, resolve_result_paths, resolve_runtime_result_dir
 from retargeting.evaluation.robot_metrics import RobotBenchmark
 
 
@@ -218,7 +218,7 @@ def write_metric_plots(metrics: dict[str, np.ndarray], output_dir: str | Path, r
     from matplotlib import colormaps, rcParams
     from matplotlib import pyplot as plt
 
-    from retargeting.utils.utils_plot import plotHistogram
+    from mr_utils.utils_plot import plotHistogram
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -273,9 +273,10 @@ def run_benchmark_from_config(config: Any) -> tuple[Path, Path | None]:
     config_data = to_plain_config_data(config)
     if not isinstance(config_data, dict):
         raise ValueError("Expected benchmark config to be a mapping.")
-    result = config_data.get("result")
-    if result is None:
-        raise ValueError("Benchmark config requires `result=...`.")
+    run_name = config_data.get("run_name")
+    if run_name is None or not str(run_name).strip():
+        raise ValueError("Benchmark config requires `run_name=...`.")
+    result = resolve_runtime_result_dir(str(run_name), config_data.get("runtime_root", "outputs"))
 
     metrics = compute_benchmark_metrics(result)
     summary = summarize_metrics(metrics)

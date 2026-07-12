@@ -5,7 +5,7 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 import open3d as o3d
-from retargeting.utils.utils_calc import (
+from mr_utils.utils_calc import (
     camera_orientation_opengl_to_common,
     posQuat2Isometry3d,
     posRotMat2Isometry3d,
@@ -13,7 +13,7 @@ from retargeting.utils.utils_calc import (
     rgbd_to_pointcloud,
     transformPositions,
 )
-from retargeting.utils.utils_open3d import create_coordinate_frame, o3d_vis_pointcloud_with_color, rgbd_to_pointcloud_by_open3d
+from mr_utils.utils_open3d import create_coordinate_frame, o3d_vis_pointcloud_with_color, rgbd_to_pointcloud_by_open3d
 
 
 # Function to check if body name exists

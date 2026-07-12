@@ -183,14 +183,16 @@ def test_solver_configs_load_backend_specific_params():
 
 
 def test_offline_retarget_config_accepts_post_action_overrides():
-    from retargeting.apps.offline_retarget import compose_hydra_offline_retarget_config
+    from retargeting.main import compose_hydra_base_config
 
-    config = compose_hydra_offline_retarget_config(
+    config = compose_hydra_base_config(
         [
+            "app=offline_retarget",
             "post.benchmark.enabled=true",
             "post.benchmark.plot=false",
             "post.visualize.enabled=true",
             "post.visualize.viewer.port=9321",
+            "post.visualize.viewer.human_keypoint_size=0.012",
         ]
     )
 
@@ -198,51 +200,97 @@ def test_offline_retarget_config_accepts_post_action_overrides():
     assert config["post"]["benchmark"]["plot"] is False
     assert config["post"]["visualize"]["enabled"] is True
     assert config["post"]["visualize"]["viewer"]["port"] == 9321
+    assert config["post"]["visualize"]["viewer"]["human_keypoint_size"] == 0.012
     assert config["teleoperation_mode"]["name"] == "simulation"
 
 
 def test_replay_app_config_loads_defaults():
-    from retargeting.config import load_replay_app_config
+    from retargeting.main import compose_hydra_base_config
 
-    config = load_replay_app_config("configs/apps/replay_avp.yaml")
+    config = compose_hydra_base_config(["app=replay"])
 
-    assert config.data == "tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz"
-    assert config.result is None
-    assert config.profile == "configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"
-    assert config.detection_source == "configs/detection_sources/avp.yaml"
-    assert isinstance(config.viewer.port, int)
-    assert config.viewer.port > 0
+    assert config["app"]["id"] == "replay"
+    assert config["run_name"] is None
+    assert "data" not in config
+    assert "profile" not in config
+    assert "detection_source" not in config
+    assert isinstance(config["viewer"]["port"], int)
+    assert config["viewer"]["port"] > 0
+    assert config["viewer"]["human_keypoint_size"] == 0.005
+
+
+def test_base_config_selects_each_whitelisted_app():
+    """Verify that each app selection composes only its own configuration.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    from retargeting.main import compose_hydra_base_config
+
+    offline_config = compose_hydra_base_config(["app=offline_retarget"])
+    replay_config = compose_hydra_base_config(["app=replay"])
+    benchmark_config = compose_hydra_base_config(["app=benchmark"])
+
+    assert offline_config["app"]["id"] == "offline_retarget"
+    assert "profile" in offline_config
+    assert replay_config["app"]["id"] == "replay"
+    assert "viewer" in replay_config
+    assert "profile" not in replay_config
+    assert benchmark_config["app"]["id"] == "benchmark"
+    assert "profile" not in benchmark_config
+
+
+def test_main_dispatcher_rejects_unknown_app_id():
+    """Verify the dispatcher accepts only explicitly registered app identifiers.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    from retargeting.main import resolve_app_runner
+
+    with pytest.raises(ValueError, match="Unsupported app.id"):
+        resolve_app_runner({"app": {"id": "not_a_real_app"}})
 
 
 def test_replay_hydra_style_mapping_resolves_runtime_options():
-    from retargeting.config import load_config_data
     from retargeting.apps.viser_retargeting_visualize import resolve_replay_options_from_config
 
     config = {
-        "data": "tests/fixtures/avp_short_replay.npz",
-        "start": 1,
-        "end": 3,
-        "stride": 2,
+        "run_name": "example",
+        "runtime_root": "/tmp/runtime-root",
         "viewer": {
             "fps": 24.0,
             "port": 8090,
             "no_robot_mesh": True,
             "trail_length": 10,
+            "human_keypoint_size": 0.012,
         },
-        "profile": load_config_data("configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"),
-        "detection_source": load_config_data("configs/detection_sources/avp.yaml"),
     }
 
     options = resolve_replay_options_from_config(config)
 
-    assert options["data"] == "tests/fixtures/avp_short_replay.npz"
-    assert options["start"] == 1
-    assert options["end"] == 3
-    assert options["stride"] == 2
+    assert options["result"] == "/tmp/runtime-root/example/retargeting"
     assert options["port"] == 8090
     assert options["no_robot_mesh"] is True
-    assert options["teleoperation_mode_config"].name == "simulation"
-    assert options["robot_config"].name == "panda_leap_paxini"
-    assert options["retargeting_config"].type == "VECTOR_WRIST_JOINT"
-    assert options["retargeting_profile_config"].name == "vector_wrist_joint_panda_leap_paxini"
-    assert options["detection_source_config"].name == "avp"
+    assert options["human_keypoint_size"] == 0.012
+
+
+def test_replay_config_requires_a_saved_artifact():
+    """Verify replay refuses to retarget raw input data.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    from retargeting.apps.viser_retargeting_visualize import resolve_replay_options_from_config
+
+    with pytest.raises(ValueError, match="requires run_name"):
+        resolve_replay_options_from_config({"viewer": {}})
