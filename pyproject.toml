@@ -1,3 +1,49 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "retargeting"
+version = "0.0.0"
+description = "Human-to-robot dexterous-hand retargeting core package."
+requires-python = ">=3.10"
+dependencies = [
+    "hydra-core>=1.3",
+    "matplotlib",
+    "nlopt",
+    "numpy",
+    "PyYAML>=6.0",
+    "scipy",
+    "tqdm",
+]
+
+[project.scripts]
+retargeting = "retargeting.main:main"
+
+[project.optional-dependencies]
+avp = [
+    "avp_stream",
+]
+dev = [
+    "pytest",
+]
+mujoco = [
+    "mujoco",
+]
+replay = [
+    "viser",
+]
+ros = []
+vision = [
+    "mediapipe",
+    "opencv-python",
+]
+
+[tool.setuptools.packages.find]
+# Install the pinned utils_python submodule as the top-level ``mr_utils`` package.
+where = ["src", "third_party/utils_python"]
+include = ["retargeting*", "retargeting_ros*", "teleoperation*", "mr_utils*"]
+
 # https://black.readthedocs.io/en/stable/the_black_code_style/current_style.html
 [tool.black]
 line-length = 120

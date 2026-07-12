@@ -5,11 +5,13 @@ import os
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 from threading import Thread
-from typing import List, Union
+from typing import Union
 
 import numpy as np
 import rclpy
+from _retargeting_compat import ensure_retargeting_package
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from robot_adaptor import RobotAdaptor
@@ -17,10 +19,19 @@ from robot_benchmark import RobotBenchmark
 from robot_control import RobotControl
 from robot_pinocchio import RobotPinocchio
 from robot_real import RobotReal
-from robot_teleoperation import RobotTeleoperation
+from teleoperation.session import TeleoperationSession
 from rviz_visualize import RvizVisualizer
 from utils.utils_keyboard import KeyboardListener
-from vision_pro_detector import VisionProDetector
+
+ensure_retargeting_package()
+from retargeting.config import (
+    load_detection_source_config,
+    load_retargeting_config,
+    load_retargeting_profile_config,
+    load_robot_config,
+    load_solver_config,
+    load_teleoperation_mode_config,
+)
 
 
 def flatten_stream_data(data_dict):
@@ -66,49 +77,29 @@ def rebuild_stream_data(data_dict):
 class RobotTeleoperationMain:
     def __init__(self):
         # --------- hyper-parameters ---------
-        self.hand_type = "leap"  # "leap" or "shadow"
-        if self.hand_type == "leap":
-            urdf_file_name = os.readlink("assets/panda_leap_paxini.urdf")  # no touch bodies/joints/sensors
-            actuated_joints_name = [f"panda_joint{i+1}" for i in range(7)] + [f"joint_{i}" for i in range(16)]
-            self.max_joint_speed = [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.5] + [1.0] * 16
-        elif self.hand_type == "shadow":
-            urdf_file_name = os.readlink("assets/panda_shadow.urdf")  # no touch bodies/joints/sensors
-            actuated_joints_name = [f"panda_joint{i+1}" for i in range(7)] + [
-                "WRJ2",
-                "WRJ1",
-                "FFJ4",
-                "FFJ3",
-                "FFJ2",
-                "FFJ1",
-                "LFJ5",
-                "LFJ4",
-                "LFJ3",
-                "LFJ2",
-                "LFJ1",
-                "MFJ4",
-                "MFJ3",
-                "MFJ2",
-                "MFJ1",
-                "RFJ4",
-                "RFJ3",
-                "RFJ2",
-                "RFJ1",
-                "THJ5",
-                "THJ4",
-                "THJ3",
-                "THJ2",
-                "THJ1",
-            ]
-            self.max_joint_speed = [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.5] + [1.0] * 24
-        touch_joints_name: List[str] = []
+        repo_root = Path(__file__).resolve().parents[4]
+        profile_config = load_retargeting_profile_config(
+            repo_root / "configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"
+        )
+        detection_source_config = load_detection_source_config(repo_root / "configs/detection_sources/avp.yaml")
+        robot_config = load_robot_config(repo_root / profile_config.robot)
+        self.robot_config = robot_config
+        retargeting_config = load_retargeting_config(repo_root / profile_config.method)
+        solver_config = load_solver_config(repo_root / "configs/solvers/nlopt_slsqp.yaml")
+        teleoperation_mode_config = load_teleoperation_mode_config(
+            repo_root / "configs/teleoperation_modes/simulation.yaml"
+        )
+        urdf_file_name = robot_config.robot_file_path
+        actuated_joints_name = list(robot_config.actuated_joints)
+        self.max_joint_speed = list(profile_config.teleoperation.max_joint_speed)
 
-        self.vision_pro_ip = "192.168.52.6"
-        # self.vision_pro_ip = "192.168.60.250"
-        self.input_device = "vision_pro"
+        self.avp_ip = "192.168.52.6"
+        # self.avp_ip = "192.168.60.250"
+        self.input_device = detection_source_config.input_device
         self.load_offline_data = True
-        self.use_hardware = False
-        self.use_virtual_hardware = False
-        self.use_high_freq_interp = True
+        self.use_hardware = teleoperation_mode_config.robot_control.use_hardware
+        self.use_virtual_hardware = teleoperation_mode_config.robot_control.use_virtual_hardware
+        self.use_high_freq_interp = teleoperation_mode_config.robot_control.use_high_freq_interp
         self.use_ros = True
 
         if self.use_ros:
@@ -129,30 +120,30 @@ class RobotTeleoperationMain:
         self.robot_adaptor = RobotAdaptor(
             robot_model=self.robot_model,
             actuated_joints_name=actuated_joints_name,
-            touch_joints_name=touch_joints_name,
         )
         self.robot_control = RobotControl(
             self.robot_model,
             self.robot_adaptor,
-            hand_type=self.hand_type,
+            initial_qpos=np.asarray(robot_config.initial_qpos, dtype=float),
+            arm_dof=profile_config.retargeting.arm_dof,
             use_hardware=self.use_hardware,
             use_virtual_hardware=self.use_virtual_hardware,
             use_high_freq_interp=self.use_high_freq_interp,
             node=self.node,
         )
-        self.robot_teleop = RobotTeleoperation(
-            hand_type=self.hand_type,
+        self.robot_teleop = TeleoperationSession(
             robot_adaptor=self.robot_adaptor,
-            robot_control=self.robot_control,
-            qpos_init=self.robot_control.init_joint_pos,
-            input_device=self.input_device,
-            mujoco_vis=False,
-            use_real_hardware=self.use_hardware,
+            robot_config=robot_config,
+            profile_config=profile_config,
+            method_config=retargeting_config,
+            detection_source_config=detection_source_config,
+            teleoperation_mode_config=teleoperation_mode_config,
+            solver_config=solver_config,
         )
         # self.robot_benchmark = RobotBenchmark(robot_adaptor=self.robot_adaptor)
-        if self.input_device == "vision_pro":
+        if self.input_device == "avp":
             if not self.load_offline_data:
-                self.robot_teleop.detector.connect(avp_ip=self.vision_pro_ip)
+                self.robot_teleop.detector.connect(avp_ip=self.avp_ip)
         else:
             raise NotImplementedError()
 
@@ -182,10 +173,10 @@ class RobotTeleoperationMain:
     def main(self):
         # ----------- hyper-parameters -----------
         project_dir = "/home/mingrui/mingrui/research/retargeting"
-        save_dir = os.path.join(project_dir, f"data/teleop_process/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}")
+        save_dir = os.path.join(project_dir, f"outputs/teleop/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}")
         os.makedirs(save_dir, exist_ok=True)
         if self.load_offline_data:
-            file_name = os.path.join(project_dir, "data/test_teleop/vision_pro/data_2025-01-16_20-27-43.npz")
+            file_name = os.path.join(project_dir, "data/test_teleop/avp/data_2025-01-16_20-27-43.npz")
             data_dict = self.load_data(file_name)
             stream_data = data_dict["stream"]
 
@@ -240,10 +231,15 @@ class RobotTeleoperationMain:
                 )
                 self.robot_teleop.set_robot_init_wrist_pose(init_tcp_pose)
                 _, _, _, wrist_pose = self.robot_teleop.detector.detect(r)
-                wrist_pose = self.robot_teleop.pose_from_avp_world_to_robot_world(wrist_pose)
-                self.robot_teleop.set_avp_init_wrist_pose(wrist_pose)
+                wrist_pose = self.robot_teleop.pose_from_detection_world_to_robot_world(wrist_pose)
+                self.robot_teleop.set_detection_source_init_wrist_pose(wrist_pose)
 
-            hand_kps_in_wrist, wrist_pose, qpos, err = self.robot_teleop.vision_pro_retarget(stream=r)
+            observation, qpos, err = self.robot_teleop.retarget_input(r)
+            if observation is None:
+                i += 1
+                continue
+            hand_kps_in_wrist = observation.hand_kps_in_wrist
+            wrist_pose = observation.wrist_pose_in_world
 
             # print(f"Frame time cost 2: {(time.time() - t_frame_start):.3f}")
 
@@ -260,13 +256,13 @@ class RobotTeleoperationMain:
             orientation_err_list.append(err["orientation_err"])
             relative_position_err_list.append(err["relative_position_err"])
             relative_position_to_wrist_err_list.append(err["relative_position_to_wrist_err"])
-            time_cost_list.append(err["optimizaion_time"])
+            time_cost_list.append(err["optimization_time"])
 
             total_position_err += err["position_err"]
             total_orientation_err += err["orientation_err"]
             total_relative_position_err += err["relative_position_err"]
             total_relative_position_to_wrist_err += err["relative_position_to_wrist_err"]
-            total_time_cost += err["optimizaion_time"]
+            total_time_cost += err["optimization_time"]
 
             # print(f"Frame time cost 3: {(time.time() - t_frame_start):.3f}")
 
@@ -319,7 +315,7 @@ class RobotTeleoperationMain:
             print("average_relative_position_err: ", total_relative_position_err / len(stream_data))
             print("average_relative_position_to_wrist_err: ", total_relative_position_to_wrist_err / len(stream_data))
             print("average_time_cost: ", total_time_cost / len(stream_data))
-            output_file = "data/simulation/shadow/complex_8.npz"
+            output_file = f"outputs/simulation/{self.robot_config.name}/complex_8.npz"
             os.makedirs(os.path.dirname(output_file), exist_ok=True)
             np.savez(
                 output_file,

@@ -1,0 +1,14 @@
+# @package _global_
+defaults:
+  - _self_
+
+app:
+  id: benchmark
+
+run_name: null
+runtime_root: outputs
+output_root: outputs
+output_dir: null
+plot: true
+plot_root: outputs
+plot_dir: null

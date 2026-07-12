@@ -57,7 +57,7 @@ data = np.array([mct_1, mct_2]).T
 
 if __name__ == "__main__":
 
-    save_dir = "data/experiments/plot"
+    save_dir = "outputs/completion_time/plots"
     os.makedirs(save_dir, exist_ok=True)
 
     group_colors = get_cmap("Pastel1")

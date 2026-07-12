@@ -1,0 +1,9 @@
+# @package teleoperation_mode
+name: simulation
+robot_control:
+  use_hardware: false
+  use_virtual_hardware: false
+  use_high_freq_interp: false
+output:
+  smooth_output_qpos: false
+  smoothing_alpha: 0.3 # When smoothing is enabled, 1.0 disables smoothing.

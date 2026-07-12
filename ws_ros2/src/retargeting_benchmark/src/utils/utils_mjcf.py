@@ -847,16 +847,3 @@ def find_actuated_joints_name(xml_path):
     for actuator in actuators:
         actuated_joints_name.append(actuator.get("joint"))
     return actuated_joints_name
-
-
-def find_touch_joints_name(xml_path, class_name: str):
-    tree = ET.parse(xml_path)
-    root = tree.getroot()
-    touch_joints = find_elements(
-        root, tags="joint", attribs={"class": class_name}, return_first=False
-    )
-    touch_joints_name = []
-    if touch_joints:
-        for joint in touch_joints:
-            touch_joints_name.append(joint.get("name"))
-    return touch_joints_name

@@ -1,0 +1,7 @@
+# @package solver
+name: nlopt_slsqp
+params:
+  # NLopt `ftol_abs` stops on absolute objective-value change.
+  ftol_abs: 0.00001
+  # Negative or zero disables the per-frame wall-clock time limit.
+  maxtime: -1

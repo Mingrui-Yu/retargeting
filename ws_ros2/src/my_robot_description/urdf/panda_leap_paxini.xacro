@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<robot name="panda_leap_tac3d" xmlns:xacro="http://www.ros.org/wiki/xacro">
+<robot name="panda_leap_paxini" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
 
     <xacro:arg name="panda_mesh_dir" default="./panda/meshes/" />
@@ -11,7 +11,7 @@
 
     <xacro:include
         filename="$(find my_robot_description)/urdf/leap_hand/leap_hand_paxini.urdf.xacro" />
-    <xacro:leap_hand_custom_tac3d mesh_dir="$(arg leap_mesh_dir)" />
+    <xacro:leap_hand_paxini mesh_dir="$(arg leap_mesh_dir)" />
 
 
     <joint name="panda_leap" type="fixed">

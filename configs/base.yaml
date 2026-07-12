@@ -1,0 +1,3 @@
+defaults:
+  - app: offline_retarget
+  - _self_

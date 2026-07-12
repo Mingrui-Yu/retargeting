@@ -1,3 +1,3 @@
 [submodule "utils_python"]
-    path = ws_ros2/src/contact_imitation/src/utils
+	path = third_party/utils_python
 	url = https://github.com/Mingrui-Yu/utils_python.git

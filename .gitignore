@@ -1,22 +1,27 @@
+# --- Project-specific files ---
 .VSCodeCounter
 .mypy_cache
+/.agents/tasks/
 
-ws_ros2/*
-!ws_ros2/src
-ws_ros2/src/realsense-ros
-# ws_ros2/src/leaphand_ros2_module
-# data/*
+# Keep ROS package sources while ignoring the workspace build and vendor checkout.
+/ws_ros2/*
+!/ws_ros2/src/
+/ws_ros2/src/realsense-ros/
 
-### Python ###
+# Local and historical experiment data is not version-controlled.
+/data/
+/outputs/
+/temps/
+
+# Generated from https://www.toptal.com/developers/gitignore/api/ros,linux,python,c++,macos,windows,git,visualstudiocode
+
+# --- Python ---
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Created by https://www.toptal.com/developers/gitignore/api/ros,linux,python,c++,macos,windows,git,visualstudiocode
-# Edit at https://www.toptal.com/developers/gitignore?templates=ros,linux,python,c++,macos,windows,git,visualstudiocode
-
-### C++ ###
+# --- C++ ---
 # Prerequisites
 *.d
 
@@ -44,7 +49,7 @@ __pycache__/
 *.out
 *.app
 
-### Git ###
+# --- Git ---
 # Created by git for backups. To disable backups in Git:
 # $ git config --global mergetool.keepBackup false
 *.orig
@@ -59,7 +64,7 @@ __pycache__/
 *_LOCAL_*.txt
 *_REMOTE_*.txt
 
-### Linux ###
+# --- Linux ---
 *~
 
 # temporary files which can be created if a process still has a handle open of a deleted file
@@ -74,7 +79,7 @@ __pycache__/
 # .nfs files are created when an open file is removed but is still being accessed
 .nfs*
 
-### macOS ###
+# --- macOS ---
 # General
 .DS_Store
 .AppleDouble
@@ -82,7 +87,6 @@ __pycache__/
 
 # Icon must end with two \r
 Icon
-
 
 # Thumbnails
 ._*
@@ -103,13 +107,8 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
-### macOS Patch ###
 # iCloud generated files
 *.icloud
-
-
-
-# C extensions
 
 # Distribution / packaging
 .Python
@@ -264,7 +263,6 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-### Python Patch ###
 # Poetry local configuration file - https://python-poetry.org/docs/configuration/#local-configuration
 poetry.toml
 
@@ -274,7 +272,7 @@ poetry.toml
 # LSP config files
 pyrightconfig.json
 
-### ROS ###
+# --- ROS ---
 devel/
 logs/
 bin/
@@ -316,15 +314,13 @@ qtcreator-*
 /planning/cfg
 /planning/docs
 /planning/src
-
-
 # Emacs
 .#*
 
 # Catkin custom files
 CATKIN_IGNORE
 
-### VisualStudioCode ###
+# --- Visual Studio Code ---
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
@@ -338,12 +334,11 @@ CATKIN_IGNORE
 # Built Visual Studio Code Extensions
 *.vsix
 
-### VisualStudioCode Patch ###
 # Ignore all local history of files
 .history
 .ionide
 
-### Windows ###
+# --- Windows ---
 # Windows thumbnail cache files
 Thumbs.db
 Thumbs.db:encryptable
@@ -369,4 +364,4 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# End of https://www.toptal.com/developers/gitignore/api/ros,linux,python,c++,macos,windows,git,visualstudiocode
+# End generated rules.

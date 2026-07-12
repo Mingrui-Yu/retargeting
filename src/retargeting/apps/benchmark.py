@@ -1,0 +1,29 @@
+"""Benchmark application runner."""
+
+from __future__ import annotations
+
+if __name__ == "__main__":
+    raise SystemExit("Use `python -m retargeting.main app=benchmark` instead.")
+
+from pathlib import Path
+from typing import Any
+
+from retargeting.pipelines.benchmark_report import run_benchmark_from_config
+
+
+def run_benchmark_app(config: Any, argv: list[str] | None = None) -> tuple[Path, Path | None]:
+    """Generate and report benchmark artifacts for a saved trajectory.
+
+    Args:
+        config: Composed benchmark application configuration.
+        argv: Command-line overrides accepted for a uniform app-runner interface.
+
+    Returns:
+        Benchmark output directory and optional plot output directory.
+    """
+    del argv
+    benchmark_output_dir, plot_output_dir = run_benchmark_from_config(config)
+    print(f"Saved benchmark summary to {benchmark_output_dir}")
+    if plot_output_dir is not None:
+        print(f"Saved benchmark plots to {plot_output_dir}")
+    return benchmark_output_dir, plot_output_dir

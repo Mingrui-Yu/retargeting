@@ -1,155 +1,137 @@
 # Analyzing Key Objectives in Human-to-Robot Retargeting for Dexterous Manipulation
 
-[[Project website](https://mingrui-yu.github.io/retargeting/)]
+<p align="center">
+  <a href="https://star-xcd.github.io/retargeting/">Project Website</a>
+  &middot;
+  <a href="https://arxiv.org/abs/2506.09384">arXiv</a>
+</p>
 
-Repository for Paper "Analyzing Key Objectives in Human-to-Robot Retargeting for Dexterous Manipulation".
+This repository contains the code for the paper "Analyzing Key Objectives in Human-to-Robot Retargeting for Dexterous Manipulation".
 
-In this repository, we provide:
+It provides:
 
-- The human-to-robot retargeting algorithm.
-- The interface of human hand detection based on RGB image or Apple Vision Pro.
-- An Rviz-based visualizer to visualize the retargeting results.
+- A Python core package for human-to-robot dexterous-hand retargeting.
+- Config-driven robot, asset, and retargeting setup.
+- Offline replay tooling for quick inspection without ROS or hardware.
+- Optional ROS2/RViz, live input, and real robot adapters.
 
 <div align="center">
   <img src="./docs/overview.jpg" alt="retargeting" width="50%" />
 </div>
 
-## Installation
+## What's New
 
-1. Ubuntu 22.04.
+**2026-07-13** — The codebase has been comprehensively **reorganized** with clearer boundaries between the retargeting core, runtime adapters, configuration, and applications. The new structure also makes quick offline replay easier to discover and run.
 
-1. To use ros2 with conda, the python version of the virtual env must be consistent with the system python. In addition, install Pinocchio when creating the virtual env.
+We welcome reproductions of this work and use of this codebase as a baseline. Please open an issue with any questions; we will address them and update the repository promptly.
 
-   ```shell
-   # e.g., ubuntu 22.04
-   conda create -n <your_env_name> -c conda-forge python=3.10.12 pinocchio
-   ```
+## Repository Layout
 
-1. Install [PyTorch](https://pytorch.org/).
+| Path | Purpose |
+| --- | --- |
+| `src/retargeting/` | Core Python package for offline replay, config loading, kinematics, and retargeting logic. |
+| `src/teleoperation/` | Input adapters, output filters, and runtime composition around the pure retargeting core. |
+| `src/retargeting_ros/` | Optional ROS adapter package for ROS messages, RViz, and real robot integration. |
+| `configs/` | Robot, retargeting, and app-level YAML configs. |
+| `assets/` | Robot URDF/MJCF assets and shared component meshes. |
+| `tests/fixtures/` | Replay fixtures used by smoke tests and quickstart examples. |
+| `outputs/` | Default location for generated teleop, simulation, benchmark, and plot outputs. This path is gitignored. |
+| `ws_ros2/` | ROS2 workspace packages, launch files, robot descriptions, and compatibility entrypoints. |
 
-1. Install:
+The intended dependency direction is:
 
-   ```bash
-   pip install numpy
-   pip install mujoco
-   pip install nlopt
-   pip install pynput
-   pip install opencv-python
-   pip install mediapipe # for RGB-based hand detection
-   pip install avp_stream # for Vision-Pro
-   ```
+```text
+configs/assets -> input adapters -> retargeting.core -> output adapters -> apps/CLI / retargeting_ros
+```
 
-1. Install [ROS2 Humble](https://docs.ros.org/en/humble/Installation.html).
+`retargeting.core.Retargeter` consumes a canonical `HandObservation` and produces raw qpos. It has no dependency on ROS, cameras, RViz, hardware control, or output smoothing. `teleoperation` owns detector adaptation, coordinate calibration, command smoothing, and the live runtime composition.
 
-1. ROS2 dependencies:
+## Install
 
-   ```shell
-   sudo apt-get install python3-colcon-common-extensions
-   sudo apt-get install ros-humble-xacro
-   sudo apt-get install ros-humble-robot-state-publisher
-   sudo apt-get install ros-humble-joint-state-publisher
-   sudo apt-get install ros-humble-joint-state-publisher-gui
-   ```
-
-1. Clone this repo: `git clone --recurse-submodules https://github.com/Mingrui-Yu/retargeting.git`
-
-1. (Only for Leap Hand Hardware) Dependence of Leap Hand hardware: refer to [here](ws_ros2/src/leaphand_ros2_module/readme.md).
-
-1. Build the ROS2 workspace:
-   ```
-   cd ws_ros2
-   colcon build --symlink-install
-   ```
-
-## Usage
-
-### Teleoperation
+The quickest path is the offline replay path. It does not require ROS, cameras, or robot hardware.
 
 ```bash
-# launch the rviz
-cd ws_ros2
-source install/setup.bash
-ros2 launch retargeting_benchmark rviz_vis_paxini.py
-
-# launch the retargeting module
+git clone --recurse-submodules https://github.com/Mingrui-Yu/retargeting.git
 cd retargeting
-source ws_ros2/install/setup.bash
-python ws_ros2/src/retargeting_benchmark/src/main_robot_teleoperation.py
+
+# Required when working from an existing clone that did not initialize submodules.
+git submodule update --init --recursive
+
+conda create -n retargeting -c conda-forge python=3.10.12 pinocchio
+conda activate retargeting
+
+pip install -e ".[replay]"
 ```
 
-## Development
+`mr_utils` is vendored from the pinned `third_party/utils_python` submodule and
+is installed together with `retargeting`; do not install it separately.
 
-If you want to do some customized development, such as adding new robots, please follow these instructions.
+Optional dependency groups are defined in `pyproject.toml`. Install only what you need:
 
-### Robot file
-
-1. Place the robot file (.xacro) in `src/my_robot_descriptioin/urdf/`. (We recommend xacro since it supports convenient combination of arms, hands, and fingertip tactile sensors.)
-
-1. Convert from .xacro to .urdf:
-
-   ```bash
-   cd ws_ros2
-   source install/setup.bash
-
-   # e.g.
-   xacro src/my_robot_description/urdf/panda_leap_tac3d.xacro > src/my_robot_description/urdf/panda_leap_tac3d.urdf
-   ```
-
-1. (Optional, for mujoco simulation) We use soft link to link [the urdf file generated from xacro in ROS workspace] to [the urdf file used for generating xml in mujoco folder]:
-
-   ```bash
-   cd retarget_benchmark
-   ln -s ws_ros2/src/my_robot_description/urdf/panda_leap_tac3d.urdf  assets/panda_leap_tac3d.urdf
-   ```
-
-1. (Optional, for mujoco simulation) Convert .urdf to .xml and do related modifications:
-
-   ```
-   python ws_ros2/src/retargeting_benchmark/src/main_robot_file_process.py
-   ```
-
-### Visualize robot urdf in Rviz
-
-Write the Rviz launch file according to the following examples:
-
-```shell
-# e.g.,
-ros2 launch my_robot_description vis_panda_leap_tac3d.py
-ros2 launch my_robot_description vis_panda_leap_paxini.py
+```bash
+pip install -e ".[mujoco]"
+pip install -e ".[vision]"
+pip install -e ".[avp]"
+pip install -e ".[dev]"
 ```
 
-## Real Robot control
+Install the GPU-enabled PyTorch build that matches your CUDA driver and runtime from the [official PyTorch instructions](https://pytorch.org/). PyTorch is required for optimizer paths, but it is not pinned in `pyproject.toml` because the correct wheel depends on your CUDA environment. This codebase has been tested with CUDA 12.8 and PyTorch `2.11.0+cu128`.
 
-**Notice**: The following hardware setup may only work on the Panda arm + Leap Hand in our lab.
+ROS/RViz and real robot paths additionally require ROS2 Humble and the ROS packages listed in [ROS And RViz](#ros-and-rviz).
 
-1. unlock robot arm at `192.168.52.3/desk/` and activate FCI;
+## Quickstart: Offline Replay
 
-2. Driver on Franka Control PC:
+Generate a reusable offline retargeting result from the repository root:
 
-   ```shell
-   ssh robotics@192.168.52.5
+```bash
+python -m retargeting.main app=offline_retarget end=200 run_name=quickstart_leap
+```
 
-   cd franka_emika_panda/ws_ros2/
-   source install/setup.bash
+The same command can optionally run follow-up steps immediately after saving the result:
 
-   ros2 launch franka_bringup low_level_joint_impedance_controller.launch.py arm_id:=fer robot_ip:=192.168.52.3
-   ```
+```bash
+python -m retargeting.main app=offline_retarget end=200 run_name=quickstart_leap post.benchmark.enabled=true
+python -m retargeting.main app=offline_retarget end=200 run_name=quickstart_leap post.visualize.enabled=true
+```
 
-3. Leap hand bringup:
+Visualize the saved result in the `viser` web viewer:
 
-   ```
-   conda activate <env>
-   ros2 launch leap_hand leap_bringup.py
-   ```
+```bash
+python -m retargeting.main app=replay run_name=quickstart_leap
+```
 
-4. Real prepare:
+Compute benchmark statistics and plots from the same result:
 
-   - franka_joint_states_freq_reduce
-   - main_robot_real_high_freq
+```bash
+python -m retargeting.main app=benchmark run_name=quickstart_leap
+```
 
-   ```shell
-   conda activate <env>
-   ros2 launch retargeting_benchmark real_prepare.py
-   ```
+Replay only plays artifacts saved by `app=offline_retarget`. The saved `metadata.yaml` supplies the robot, profile, and detection calibration needed to reconstruct the viewer context; replay does not rerun retargeting from raw AVP data.
 
-5. Run your teleoperation scripts.
+If you only want to verify the package in a headless environment, run:
+
+```bash
+python -m pytest tests
+```
+
+## Detailed Documentation
+
+Configuration, asset layout, data and outputs, ROS/RViz, teleoperation, real robot control, and development notes are in [docs/configuration-and-development.md](docs/configuration-and-development.md).
+
+## Citation
+
+```bibtex
+@article{xin2026analyzing,
+  title={Analyzing Key Objectives in Human-to-Robot Retargeting for Dexterous Manipulation},
+  author={Xin, Chendong and Yu, Mingrui and Jiang, Yongpeng and Zhang, Zhefeng and Li, Xiang},
+  journal={IEEE Robotics and Automation Practice},
+  volume={1},
+  pages={29--34},
+  year={2026},
+  doi={10.1109/RAP.2026.3656110}
+}
+```
+
+## Contact
+
+For questions, contact Mingrui Yu at [mingruiyu98@gmail.com](mailto:mingruiyu98@gmail.com).
