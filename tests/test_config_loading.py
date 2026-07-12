@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 
 def test_robot_configs_load_and_validate_asset_paths():
     from retargeting.config import load_robot_config
@@ -33,7 +35,6 @@ def test_robot_config_loads_from_composed_mapping():
     config = load_robot_config(data)
 
     assert config.name == "panda_leap_paxini"
-    assert config.hand_type == "leap"
     assert len(config.actuated_joints) == len(config.initial_qpos)
     assert config.benchmark.human_tip_indices == (4, 8, 12, 16)
 
@@ -84,26 +85,81 @@ def test_robot_benchmark_uses_configured_fingertip_metadata():
     np.testing.assert_allclose(benchmark.relative_position_to_wrist_error(None, target_pos, 1), np.zeros(4))
 
 
-def test_retargeting_config_loads_vector_wrist_joint_targets():
-    from retargeting.config import load_retargeting_config
+def test_retargeting_method_and_profile_configs_load_vector_wrist_joint_targets():
+    from retargeting.config import ABLATION_OPTION_DESCRIPTIONS, load_retargeting_config, load_retargeting_profile_config
 
-    config = load_retargeting_config("configs/retargeting/vector_wrist_joint.yaml")
+    config = load_retargeting_config("configs/retargeting_methods/vector_wrist_joint.yaml")
+    profile = load_retargeting_profile_config("configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml")
 
     assert config.type == "VECTOR_WRIST_JOINT"
+    assert config.ablation_option == 0
+    assert config.ablation_description == ABLATION_OPTION_DESCRIPTIONS[0]
     assert config.optimizer_class == "VectorWristJointOptimizerV2"
     assert config.optimizer_params["huber_delta"] == 0.02
-    assert config.targets_for("leap").wrist_link_name == "wrist"
-    assert config.targets_for("shadow").wrist_link_name == "ee_link"
-    if config.joint_limit_overrides:
-        assert config.joint_limit_overrides[0].indices == (9, 10, 13, 14, 17, 18)
+    assert profile.robot == "configs/robots/panda_leap_paxini.yaml"
+    assert profile.method == "configs/retargeting_methods/vector_wrist_joint.yaml"
+    assert profile.target.wrist_link_name == "wrist"
+    assert profile.objective.weights.world_thumb == 10.0
+
+
+def test_retargeting_config_rejects_unknown_ablation_option():
+    from retargeting.config import load_config_data, load_retargeting_config
+
+    config_data = load_config_data("configs/retargeting_methods/vector_wrist_joint.yaml")
+    config_data["ablation_option"] = 99
+
+    with pytest.raises(ValueError, match="Unsupported ablation_option"):
+        load_retargeting_config(config_data)
+
+
+def test_detection_source_configs_load_detector_calibration():
+    from retargeting.config import load_detection_source_config
+
+    avp_config = load_detection_source_config("configs/detection_sources/avp.yaml")
+    rgb_config = load_detection_source_config("configs/detection_sources/rgb.yaml")
+
+    assert avp_config.input_device == "avp"
+    assert avp_config.rotation_euler_xyz_deg == (0.0, 0.0, 180.0)
+    assert avp_config.translation == (0.7, 0.2, -1.0)
+    assert avp_config.use_relative_wrist_alignment is True
+    assert rgb_config.input_device == "rgb"
+    assert rgb_config.translation == (0.4, 0.0, 0.0)
+    assert rgb_config.use_relative_wrist_alignment is False
+
+
+def test_teleoperation_mode_configs_load_runtime_flags():
+    from retargeting.config import load_teleoperation_mode_config
+
+    simulation_config = load_teleoperation_mode_config("configs/teleoperation_modes/simulation.yaml")
+    real_world_config = load_teleoperation_mode_config("configs/teleoperation_modes/real_world.yaml")
+    virtual_hardware_config = load_teleoperation_mode_config("configs/teleoperation_modes/virtual_hardware.yaml")
+
+    assert simulation_config.name == "simulation"
+    assert simulation_config.robot_control.use_hardware is False
+    assert simulation_config.output.smooth_output_qpos is False
+    assert real_world_config.robot_control.use_hardware is True
+    assert real_world_config.robot_control.use_virtual_hardware is False
+    assert real_world_config.output.smooth_output_qpos is True
+    assert virtual_hardware_config.robot_control.use_hardware is True
+    assert virtual_hardware_config.robot_control.use_virtual_hardware is True
+    assert virtual_hardware_config.output.smooth_output_qpos is False
+
+
+def test_default_teleoperation_mode_is_simulation():
+    from retargeting.config import load_teleoperation_mode_config
+
+    config = load_teleoperation_mode_config(None)
+
+    assert config.name == "simulation"
+    assert config.robot_control.use_hardware is False
+    assert config.output.smoothing_alpha == 0.3
 
 
 def test_retargeting_config_accepts_legacy_vector_wrist_joint_class():
     from retargeting.config import load_config_data, load_retargeting_config
-    from retargeting.retarget_optimizer import VectorWristJointOptimizer
-    from retargeting.robot_teleoperation import get_optimizer_class
+    from retargeting.retarget_optimizer import VectorWristJointOptimizer, get_optimizer_class
 
-    config_data = load_config_data("configs/retargeting/vector_wrist_joint.yaml")
+    config_data = load_config_data("configs/retargeting_methods/vector_wrist_joint.yaml")
     config_data["optimizer"]["class"] = "VectorWristJointOptimizer"
 
     config = load_retargeting_config(config_data)
@@ -142,6 +198,7 @@ def test_offline_retarget_config_accepts_post_action_overrides():
     assert config["post"]["benchmark"]["plot"] is False
     assert config["post"]["visualize"]["enabled"] is True
     assert config["post"]["visualize"]["viewer"]["port"] == 9321
+    assert config["teleoperation_mode"]["name"] == "simulation"
 
 
 def test_replay_app_config_loads_defaults():
@@ -151,8 +208,8 @@ def test_replay_app_config_loads_defaults():
 
     assert config.data == "tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz"
     assert config.result is None
-    assert config.robot == "configs/robots/panda_leap_paxini.yaml"
-    assert config.retargeting == "configs/retargeting/vector_wrist_joint.yaml"
+    assert config.profile == "configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"
+    assert config.detection_source == "configs/detection_sources/avp.yaml"
     assert isinstance(config.viewer.port, int)
     assert config.viewer.port > 0
 
@@ -163,7 +220,6 @@ def test_replay_hydra_style_mapping_resolves_runtime_options():
 
     config = {
         "data": "tests/fixtures/avp_short_replay.npz",
-        "hand_type": "leap",
         "start": 1,
         "end": 3,
         "stride": 2,
@@ -173,18 +229,20 @@ def test_replay_hydra_style_mapping_resolves_runtime_options():
             "no_robot_mesh": True,
             "trail_length": 10,
         },
-        "robot": load_config_data("configs/robots/panda_leap_paxini.yaml"),
-        "retargeting": load_config_data("configs/retargeting/vector_wrist_joint.yaml"),
+        "profile": load_config_data("configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"),
+        "detection_source": load_config_data("configs/detection_sources/avp.yaml"),
     }
 
     options = resolve_replay_options_from_config(config)
 
     assert options["data"] == "tests/fixtures/avp_short_replay.npz"
-    assert options["hand_type"] == "leap"
     assert options["start"] == 1
     assert options["end"] == 3
     assert options["stride"] == 2
     assert options["port"] == 8090
     assert options["no_robot_mesh"] is True
+    assert options["teleoperation_mode_config"].name == "simulation"
     assert options["robot_config"].name == "panda_leap_paxini"
     assert options["retargeting_config"].type == "VECTOR_WRIST_JOINT"
+    assert options["retargeting_profile_config"].name == "vector_wrist_joint_panda_leap_paxini"
+    assert options["detection_source_config"].name == "avp"

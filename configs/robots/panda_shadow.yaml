@@ -1,6 +1,5 @@
 # @package robot
 name: panda_shadow
-hand_type: shadow
 model:
   type: urdf
   path: assets/robots/panda_shadow/urdf/panda_shadow.urdf

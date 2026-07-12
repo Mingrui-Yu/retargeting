@@ -65,7 +65,7 @@ def test_offline_retarget_post_actions_build_followup_configs(tmp_path, monkeypa
     actions = offline_retarget.run_post_retarget_actions(
         {
             "data": str(FIXTURE),
-            "hand_type": "leap",
+            "detection_source": "configs/detection_sources/avp.yaml",
             "start": 0,
             "end": 200,
             "stride": 1,
@@ -87,8 +87,7 @@ def test_offline_retarget_post_actions_build_followup_configs(tmp_path, monkeypa
             },
         },
         output_dir,
-        robot_source="configs/robots/panda_leap_paxini.yaml",
-        retargeting_source="configs/retargeting/vector_wrist_joint.yaml",
+        profile_source="configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml",
         solver_source="configs/solvers/nlopt_slsqp.yaml",
     )
 
@@ -96,8 +95,8 @@ def test_offline_retarget_post_actions_build_followup_configs(tmp_path, monkeypa
     assert recorded["benchmark"]["result"] == str(output_dir)
     assert recorded["benchmark"]["plot"] is False
     assert recorded["visualize"]["result"] == str(output_dir)
-    assert recorded["visualize"]["robot"] == "configs/robots/panda_leap_paxini.yaml"
-    assert recorded["visualize"]["retargeting"] == "configs/retargeting/vector_wrist_joint.yaml"
+    assert recorded["visualize"]["profile"] == "configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"
+    assert recorded["visualize"]["detection_source"] == "configs/detection_sources/avp.yaml"
     assert recorded["visualize"]["solver"] == "configs/solvers/nlopt_slsqp.yaml"
     assert recorded["visualize"]["viewer"]["port"] == 9321
     assert recorded["visualize"]["viewer"]["no_robot_mesh"] is True
@@ -119,8 +118,7 @@ def test_offline_retargeting_result_artifact_round_trip(tmp_path):
 
     context, trajectory, metadata = run_offline_retargeting(
         data_file=str(FIXTURE),
-        robot_config_path="configs/robots/panda_leap_paxini.yaml",
-        retargeting_config_path="configs/retargeting/vector_wrist_joint.yaml",
+        retargeting_profile_config_path="configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml",
         start=0,
         end=1,
         stride=1,
@@ -134,6 +132,7 @@ def test_offline_retargeting_result_artifact_round_trip(tmp_path):
     assert (output_dir / "metadata.yaml").is_file()
     assert loaded_metadata.num_frames == 2
     assert loaded_metadata.qpos_dim == context.robot_adaptor.doa
+    assert loaded_metadata.extra["detection_source_config"]["name"] == "avp"
     assert loaded_trajectory.retarget_qpos.shape == (2, context.robot_adaptor.doa)
     assert loaded_trajectory.hand_keypoints_world.shape == (2, 21, 3)
     assert "wrist" in loaded_trajectory.robot_frame_poses
@@ -155,8 +154,7 @@ def test_benchmark_summary_from_saved_result(tmp_path):
 
     _, trajectory, metadata = run_offline_retargeting(
         data_file=str(FIXTURE),
-        robot_config_path="configs/robots/panda_leap_paxini.yaml",
-        retargeting_config_path="configs/retargeting/vector_wrist_joint.yaml",
+        retargeting_profile_config_path="configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml",
         start=0,
         end=1,
         stride=1,

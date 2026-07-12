@@ -190,10 +190,212 @@ class RobotBenchmarkConfig:
             fingertip.validate()
 
 
+def _float_tuple(values: Any, field_name: str) -> tuple[float, ...]:
+    """Convert a sequence-like config field to a tuple of floats.
+
+    Args:
+        values: Raw sequence loaded from YAML or a composed config mapping.
+        field_name: Human-readable field name used in validation errors.
+
+    Returns:
+        Tuple of floats with the same ordering as the source sequence.
+    """
+    if values is None:
+        raise ValueError(f"Missing required float sequence: {field_name}")
+    return tuple(float(item) for item in values)
+
+
+@dataclass(frozen=True)
+class RobotTeleoperationConfig:
+    arm_dof: int
+    human_wrist_index: int
+    joint_position_weights: tuple[float, ...]
+    joint_velocity_weights: tuple[float, ...]
+    max_joint_speed: tuple[float, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "RobotTeleoperationConfig":
+        """Build robot-specific teleoperation metadata from config data.
+
+        Args:
+            data: Mapping with robot-specific teleoperation weights and indices.
+
+        Returns:
+            Typed teleoperation config for one robot/hand embodiment.
+        """
+        return cls(
+            arm_dof=int(data["arm_dof"]),
+            human_wrist_index=int(data.get("human_wrist_index", 0)),
+            joint_position_weights=_float_tuple(data["joint_position_weights"], "joint_position_weights"),
+            joint_velocity_weights=_float_tuple(data["joint_velocity_weights"], "joint_velocity_weights"),
+            max_joint_speed=_float_tuple(data["max_joint_speed"], "max_joint_speed"),
+        )
+
+    def validate(self, qpos_size: int) -> None:
+        """Validate teleoperation metadata against the robot qpos size.
+
+        Args:
+            qpos_size: Number of actuated robot joints configured for this robot.
+
+        Returns:
+            None.
+        """
+        if not 0 < self.arm_dof <= qpos_size:
+            raise ValueError(f"arm_dof must be in [1, {qpos_size}], got {self.arm_dof}.")
+        if self.human_wrist_index < 0:
+            raise ValueError("human_wrist_index must be non-negative.")
+        for field_name, values in [
+            ("joint_position_weights", self.joint_position_weights),
+            ("joint_velocity_weights", self.joint_velocity_weights),
+            ("max_joint_speed", self.max_joint_speed),
+        ]:
+            if len(values) != qpos_size:
+                raise ValueError(f"{field_name} has {len(values)} values but robot qpos has {qpos_size}.")
+
+
+@dataclass(frozen=True)
+class TeleoperationRobotControlConfig:
+    use_hardware: bool = False
+    use_virtual_hardware: bool = False
+    use_high_freq_interp: bool = False
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "TeleoperationRobotControlConfig":
+        """Build robot-control runtime flags from mode config data.
+
+        Args:
+            data: Optional mapping with hardware and interpolation flags.
+
+        Returns:
+            Typed robot-control runtime config.
+        """
+        data = {} if data is None else data
+        return cls(
+            use_hardware=bool(data.get("use_hardware", False)),
+            use_virtual_hardware=bool(data.get("use_virtual_hardware", False)),
+            use_high_freq_interp=bool(data.get("use_high_freq_interp", False)),
+        )
+
+
+@dataclass(frozen=True)
+class TeleoperationOutputConfig:
+    smooth_output_qpos: bool = False
+    smoothing_alpha: float = 0.3
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "TeleoperationOutputConfig":
+        """Build output filtering config from mode config data.
+
+        Args:
+            data: Optional mapping with output smoothing settings.
+
+        Returns:
+            Typed output filtering config.
+        """
+        data = {} if data is None else data
+        return cls(
+            smooth_output_qpos=bool(data.get("smooth_output_qpos", False)),
+            smoothing_alpha=float(data.get("smoothing_alpha", 0.3)),
+        )
+
+    def validate(self) -> None:
+        """Validate output filtering config.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        if not 0.0 <= self.smoothing_alpha <= 1.0:
+            raise ValueError(f"smoothing_alpha must be in [0, 1], got {self.smoothing_alpha}.")
+
+
+@dataclass(frozen=True)
+class TeleoperationModeConfig:
+    name: str
+    robot_control: TeleoperationRobotControlConfig
+    output: TeleoperationOutputConfig
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "TeleoperationModeConfig":
+        """Build runtime teleoperation mode config from config data.
+
+        Args:
+            data: Mapping with mode name, robot-control flags, and output filtering.
+
+        Returns:
+            Typed teleoperation runtime mode config.
+        """
+        return cls(
+            name=str(data["name"]),
+            robot_control=TeleoperationRobotControlConfig.from_dict(data.get("robot_control")),
+            output=TeleoperationOutputConfig.from_dict(data.get("output")),
+        )
+
+    def validate(self) -> None:
+        """Validate runtime teleoperation mode config.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        if not self.name:
+            raise ValueError("Teleoperation mode name must not be empty.")
+        self.output.validate()
+
+
+@dataclass(frozen=True)
+class DetectionSourceConfig:
+    name: str
+    input_device: str
+    rotation_euler_xyz_deg: tuple[float, float, float]
+    translation: tuple[float, float, float]
+    use_relative_wrist_alignment: bool = False
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "DetectionSourceConfig":
+        """Build detector-source calibration metadata from config data.
+
+        Args:
+            data: Mapping with detector source name, input device, and source-world to robot-world transform.
+
+        Returns:
+            Typed detection source config.
+        """
+        transform_data = data.get("world_to_robot", data)
+        return cls(
+            name=str(data["name"]),
+            input_device=str(data["input_device"]),
+            rotation_euler_xyz_deg=tuple(
+                float(item) for item in transform_data.get("rotation_euler_xyz_deg", [0.0, 0.0, 0.0])
+            ),
+            translation=tuple(float(item) for item in transform_data.get("translation", [0.0, 0.0, 0.0])),
+            use_relative_wrist_alignment=bool(data.get("use_relative_wrist_alignment", False)),
+        )
+
+    def validate(self) -> None:
+        """Validate detector-source calibration metadata.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        if self.input_device not in {"rgb", "avp"}:
+            raise ValueError(f"Unsupported input_device: {self.input_device}")
+        if len(self.rotation_euler_xyz_deg) != 3:
+            raise ValueError("rotation_euler_xyz_deg must have exactly 3 values.")
+        if len(self.translation) != 3:
+            raise ValueError("translation must have exactly 3 values.")
+
+
 @dataclass(frozen=True)
 class RobotConfig:
     name: str
-    hand_type: str
     model: RobotModelConfig
     actuated_joints: tuple[str, ...]
     initial_qpos: tuple[float, ...]
@@ -206,7 +408,6 @@ class RobotConfig:
     def from_dict(cls, data: dict[str, Any]) -> "RobotConfig":
         return cls(
             name=str(data["name"]),
-            hand_type=str(data["hand_type"]),
             model=RobotModelConfig.from_dict(data["model"]),
             actuated_joints=tuple(str(item) for item in data["actuated_joints"]),
             initial_qpos=tuple(float(item) for item in data["initial_qpos"]),
@@ -221,8 +422,6 @@ class RobotConfig:
         return self.model.loader_path()
 
     def validate(self) -> None:
-        if self.hand_type not in {"leap", "shadow"}:
-            raise ValueError(f"Unsupported hand_type in robot config: {self.hand_type}")
         self.model.validate()
         if len(self.actuated_joints) != len(self.initial_qpos):
             raise ValueError(
@@ -267,6 +466,80 @@ class JointLimitOverride:
         )
 
 
+@dataclass(frozen=True)
+class RetargetingObjectiveWeightsConfig:
+    world_thumb: float = 10.0
+    wrist_fingertip: float = 1.0
+    thumb_primary: float = 10.0
+    fingertip_orientation: float = 10.0
+    wrist_rotation: float = 0.1
+    arm_link_vector: float = 10.0
+    arm_wrist_rotation: float = 1.0
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "RetargetingObjectiveWeightsConfig":
+        """Build objective term weights from config data.
+
+        Args:
+            data: Optional mapping with scalar weights for retargeting objective terms.
+
+        Returns:
+            Typed objective weight config.
+        """
+        data = {} if data is None else data
+        return cls(
+            world_thumb=float(data.get("world_thumb", 10.0)),
+            wrist_fingertip=float(data.get("wrist_fingertip", 1.0)),
+            thumb_primary=float(data.get("thumb_primary", 10.0)),
+            fingertip_orientation=float(data.get("fingertip_orientation", 10.0)),
+            wrist_rotation=float(data.get("wrist_rotation", 0.1)),
+            arm_link_vector=float(data.get("arm_link_vector", 10.0)),
+            arm_wrist_rotation=float(data.get("arm_wrist_rotation", 1.0)),
+        )
+
+
+@dataclass(frozen=True)
+class RetargetingObjectiveConfig:
+    pinch_transition_threshold: float = 0.1
+    pinch_contact_threshold: float = 0.01
+    pinch_sigmoid_slope: float = 10.0
+    weights: RetargetingObjectiveWeightsConfig = RetargetingObjectiveWeightsConfig()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "RetargetingObjectiveConfig":
+        """Build high-level retargeting objective hyperparameters.
+
+        Args:
+            data: Optional mapping with pinch thresholds and objective weights.
+
+        Returns:
+            Typed objective config used to build per-frame optimizer references.
+        """
+        data = {} if data is None else data
+        return cls(
+            pinch_transition_threshold=float(data.get("pinch_transition_threshold", 0.1)),
+            pinch_contact_threshold=float(data.get("pinch_contact_threshold", 0.01)),
+            pinch_sigmoid_slope=float(data.get("pinch_sigmoid_slope", 10.0)),
+            weights=RetargetingObjectiveWeightsConfig.from_dict(data.get("weights")),
+        )
+
+    def validate(self) -> None:
+        """Validate objective hyperparameters.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        if self.pinch_contact_threshold < 0:
+            raise ValueError("pinch_contact_threshold must be non-negative.")
+        if self.pinch_transition_threshold <= self.pinch_contact_threshold:
+            raise ValueError("pinch_transition_threshold must be larger than pinch_contact_threshold.")
+        if self.pinch_sigmoid_slope <= 0:
+            raise ValueError("pinch_sigmoid_slope must be positive.")
+
+
 def _coerce_optimizer_param(value: Any) -> Any:
     """Convert optimizer params to floats while preserving backend-specific groups.
 
@@ -281,6 +554,19 @@ def _coerce_optimizer_param(value: Any) -> Any:
     return float(value)
 
 
+ABLATION_OPTION_DESCRIPTIONS: dict[int, str] = {
+    0: "full",
+    1: "without pinch",
+    2: "actual pinch distance",
+    3: "without orientation",
+    4: "DexMV orientation",
+    5: "replace thumb position with wrist position",
+    6: "replace the thumb position term with a wrist position term, remove the fingertip orientation term and the pinch term",
+    7: "remove joint position term",
+    8: "option 6 plus option 7",
+}
+
+
 @dataclass(frozen=True)
 class RetargetingConfig:
     type: str
@@ -288,46 +574,104 @@ class RetargetingConfig:
     ablation_option: int
     optimizer_class: str
     optimizer_params: dict[str, Any]
-    targets: dict[str, RetargetTargetConfig]
-    joint_limit_overrides: tuple[JointLimitOverride, ...]
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "RetargetingConfig":
         optimizer = data["optimizer"]
-        targets = {
-            hand_type: RetargetTargetConfig.from_dict(target_data)
-            for hand_type, target_data in data["targets"].items()
-        }
         return cls(
             type=str(data["type"]),
             setting_id=int(data.get("setting_id", 0)),
             ablation_option=int(data.get("ablation_option", 0)),
             optimizer_class=str(optimizer["class"]),
             optimizer_params={key: _coerce_optimizer_param(value) for key, value in optimizer["params"].items()},
-            targets=targets,
-            joint_limit_overrides=tuple(
-                JointLimitOverride.from_dict(item) for item in data.get("joint_limit_overrides", [])
-            ),
         )
 
-    def targets_for(self, hand_type: str) -> RetargetTargetConfig:
-        try:
-            return self.targets[hand_type]
-        except KeyError as exc:
-            raise ValueError(f"No retarget target config for hand_type: {hand_type}") from exc
+    @property
+    def ablation_description(self) -> str:
+        """Return the human-readable description for the configured ablation option.
+
+        Args:
+            None.
+
+        Returns:
+            Description text for `ablation_option`.
+        """
+        return ABLATION_OPTION_DESCRIPTIONS[self.ablation_option]
 
     def validate(self) -> None:
         supported_optimizer_classes = {"VectorWristJointOptimizer", "VectorWristJointOptimizerV2"}
         if self.optimizer_class not in supported_optimizer_classes:
             raise ValueError(f"Unsupported optimizer class in Phase 2: {self.optimizer_class}")
+        if self.ablation_option not in ABLATION_OPTION_DESCRIPTIONS:
+            supported_options = sorted(ABLATION_OPTION_DESCRIPTIONS)
+            raise ValueError(
+                f"Unsupported ablation_option: {self.ablation_option}. Supported options: {supported_options}"
+            )
         for required_param in ["huber_delta"]:
             if required_param not in self.optimizer_params:
                 raise ValueError(f"Missing optimizer param: {required_param}")
-        for target in self.targets.values():
-            target.validate()
+
+
+@dataclass(frozen=True)
+class RetargetingProfileConfig:
+    name: str
+    robot: str
+    method: str
+    target: RetargetTargetConfig
+    objective: RetargetingObjectiveConfig
+    teleoperation: RobotTeleoperationConfig
+    joint_limit_overrides: tuple[JointLimitOverride, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "RetargetingProfileConfig":
+        """Build a robot-method retargeting profile from config data.
+
+        Args:
+            data: Mapping with robot/method sources and robot-method-specific targets,
+                objective weights, and teleoperation parameters.
+
+        Returns:
+            Typed retargeting profile config.
+        """
+        return cls(
+            name=str(data["name"]),
+            robot=str(data["robot"]),
+            method=str(data["method"]),
+            target=RetargetTargetConfig.from_dict(data["target"]),
+            objective=RetargetingObjectiveConfig.from_dict(data.get("objective")),
+            teleoperation=RobotTeleoperationConfig.from_dict(data["teleoperation"]),
+            joint_limit_overrides=tuple(
+                JointLimitOverride.from_dict(item) for item in data.get("joint_limit_overrides", [])
+            ),
+        )
+
+    def validate(self, robot_config: RobotConfig | None = None) -> None:
+        """Validate profile metadata, optionally against a loaded robot config.
+
+        Args:
+            robot_config: Optional robot config used to validate qpos-dependent
+                teleoperation arrays and target frame names.
+
+        Returns:
+            None.
+        """
+        self.target.validate()
+        self.objective.validate()
         for override in self.joint_limit_overrides:
             if not override.indices:
                 raise ValueError("joint_limit_overrides indices must not be empty.")
+        if robot_config is None:
+            return
+        self.teleoperation.validate(len(robot_config.initial_qpos))
+        frame_names = {"world", *robot_config.visual_frame_names}
+        target_frame_names = set()
+        for origin_link, task_link in self.target.link_pairs:
+            target_frame_names.add(origin_link)
+            target_frame_names.add(task_link)
+        target_frame_names.add(self.target.wrist_link_name)
+        missing_frame_names = sorted(target_frame_names - frame_names)
+        if missing_frame_names:
+            raise ValueError(f"Profile target frame names are missing from robot visual_frame_names: {missing_frame_names}")
 
 
 @dataclass(frozen=True)
@@ -381,6 +725,29 @@ def default_solver_config() -> SolverConfig:
     return SolverConfig(name="nlopt_slsqp", params={"ftol_abs": 1e-5, "maxtime": -1.0})
 
 
+def default_teleoperation_mode_config() -> TeleoperationModeConfig:
+    """Return the default simulation-style teleoperation runtime mode.
+
+    Args:
+        None.
+
+    Returns:
+        Teleoperation mode config with no hardware execution and no output smoothing.
+    """
+    return TeleoperationModeConfig(
+        name="simulation",
+        robot_control=TeleoperationRobotControlConfig(
+            use_hardware=False,
+            use_virtual_hardware=False,
+            use_high_freq_interp=False,
+        ),
+        output=TeleoperationOutputConfig(
+            smooth_output_qpos=False,
+            smoothing_alpha=0.3,
+        ),
+    )
+
+
 @dataclass(frozen=True)
 class ViewerConfig:
     fps: float = 30.0
@@ -403,8 +770,8 @@ class ViewerConfig:
 class ReplayAppConfig:
     data: str
     result: str | None
-    robot: str
-    retargeting: str
+    profile: str
+    detection_source: str
     solver: str | None
     start: int
     end: int
@@ -416,8 +783,8 @@ class ReplayAppConfig:
         return cls(
             data=str(data["data"]),
             result=None if data.get("result") is None else str(data["result"]),
-            robot=str(data["robot"]),
-            retargeting=str(data["retargeting"]),
+            profile=str(data["profile"]),
+            detection_source=str(data["detection_source"]),
             solver=None if data.get("solver") is None else str(data["solver"]),
             start=int(data.get("start", 0)),
             end=int(data.get("end", -1)),
@@ -455,6 +822,44 @@ def load_retargeting_config(path: str | Path | Mapping[str, Any] | RetargetingCo
     if isinstance(path, RetargetingConfig):
         return path
     config = RetargetingConfig.from_dict(_load_config_source(path))
+    config.validate()
+    return config
+
+
+def load_retargeting_profile_config(
+    path: str | Path | Mapping[str, Any] | RetargetingProfileConfig,
+) -> RetargetingProfileConfig:
+    if isinstance(path, RetargetingProfileConfig):
+        return path
+    config = RetargetingProfileConfig.from_dict(_load_config_source(path))
+    try:
+        robot_config = load_robot_config(config.robot)
+    except (FileNotFoundError, ValueError, TypeError):
+        robot_config = None
+    config.validate(robot_config)
+    return config
+
+
+def load_detection_source_config(
+    path: str | Path | Mapping[str, Any] | DetectionSourceConfig,
+) -> DetectionSourceConfig:
+    if isinstance(path, DetectionSourceConfig):
+        return path
+    config = DetectionSourceConfig.from_dict(_load_config_source(path))
+    config.validate()
+    return config
+
+
+def load_teleoperation_mode_config(
+    path: str | Path | Mapping[str, Any] | TeleoperationModeConfig | None,
+) -> TeleoperationModeConfig:
+    if isinstance(path, TeleoperationModeConfig):
+        return path
+    config = (
+        default_teleoperation_mode_config()
+        if path is None
+        else TeleoperationModeConfig.from_dict(_load_config_source(path))
+    )
     config.validate()
     return config
 

@@ -7,10 +7,13 @@ from typing import Any, List
 
 import numpy as np
 from retargeting.config import (
+    load_detection_source_config,
     load_replay_app_config,
     load_retargeting_config,
+    load_retargeting_profile_config,
     load_robot_config,
     load_solver_config,
+    load_teleoperation_mode_config,
     resolve_project_path,
     to_plain_config_data,
 )
@@ -164,11 +167,12 @@ def render_frame(
 def parse_args(argv: List[str] | None = None):
     parser = argparse.ArgumentParser(description="Visualize offline hand retargeting replay with viser.")
     parser.add_argument("--config", default=None, help="Replay app config path.")
+    parser.add_argument("--profile", default=None, help="Retargeting profile config path.")
+    parser.add_argument("--detection-source", default=None, help="Detection source config path.")
     parser.add_argument("--robot", default=None, help="Robot config path.")
-    parser.add_argument("--retarget", default=None, help="Retargeting config path.")
+    parser.add_argument("--retarget", default=None, help="Retargeting method config path.")
     parser.add_argument("--data", default=None)
     parser.add_argument("--result", default=None, help="Saved retargeting result directory or result.npz path.")
-    parser.add_argument("--hand-type", default=None, choices=["leap", "shadow"])
     parser.add_argument("--start", type=int, default=None)
     parser.add_argument("--end", type=int, default=None)
     parser.add_argument("--stride", type=int, default=None)
@@ -188,9 +192,17 @@ def resolve_replay_options(args):
     app_config = load_replay_app_config(args.config) if args.config is not None else None
     viewer_config = app_config.viewer if app_config is not None else None
 
-    robot_config_path = args.robot if args.robot is not None else (app_config.robot if app_config is not None else None)
-    retargeting_config_path = (
-        args.retarget if args.retarget is not None else (app_config.retargeting if app_config is not None else None)
+    profile_config_path = args.profile if args.profile is not None else (app_config.profile if app_config is not None else None)
+    detection_source_path = (
+        args.detection_source
+        if args.detection_source is not None
+        else (app_config.detection_source if app_config is not None else None)
+    )
+    profile_config = load_retargeting_profile_config(profile_config_path) if profile_config_path is not None else None
+    detection_source_config = load_detection_source_config(detection_source_path) if detection_source_path is not None else None
+    robot_config_path = args.robot if args.robot is not None else (profile_config.robot if profile_config is not None else None)
+    retargeting_config_path = args.retarget if args.retarget is not None else (
+        profile_config.method if profile_config is not None else None
     )
     solver_config_path = app_config.solver if app_config is not None else None
     robot_config = load_robot_config(robot_config_path) if robot_config_path is not None else None
@@ -198,17 +210,11 @@ def resolve_replay_options(args):
         load_retargeting_config(retargeting_config_path) if retargeting_config_path is not None else None
     )
     solver_config = load_solver_config(solver_config_path)
-
-    hand_type = args.hand_type
-    if hand_type is None and robot_config is not None:
-        hand_type = robot_config.hand_type
-    if hand_type is None:
-        hand_type = "leap"
+    teleoperation_mode_config = load_teleoperation_mode_config(None)
 
     return {
         "result": args.result if args.result is not None else getattr(app_config, "result", None),
         "data": args.data if args.data is not None else (app_config.data if app_config is not None else DEFAULT_REPLAY_DATA),
-        "hand_type": hand_type,
         "start": args.start if args.start is not None else (app_config.start if app_config is not None else 0),
         "end": args.end if args.end is not None else (app_config.end if app_config is not None else -1),
         "stride": args.stride if args.stride is not None else (app_config.stride if app_config is not None else 1),
@@ -222,6 +228,9 @@ def resolve_replay_options(args):
         else (viewer_config.trail_length if viewer_config is not None else 120),
         "robot_config": robot_config,
         "retargeting_config": retargeting_config,
+        "retargeting_profile_config": profile_config,
+        "detection_source_config": detection_source_config,
+        "teleoperation_mode_config": teleoperation_mode_config,
         "solver_config": solver_config,
     }
 
@@ -265,23 +274,20 @@ def resolve_replay_options_from_config(config: Any) -> dict[str, Any]:
     app_data = config_data.get("app", {})
     viewer_data = config_data.get("viewer", app_data.get("viewer", {}))
 
-    robot_source = config_data.get("robot", app_data.get("robot"))
-    retargeting_source = config_data.get("retargeting", app_data.get("retargeting"))
+    profile_source = config_data.get("profile", app_data.get("profile"))
+    detection_source = config_data.get("detection_source", app_data.get("detection_source"))
     solver_source = config_data.get("solver", app_data.get("solver"))
-    robot_config = load_robot_config(robot_source) if robot_source is not None else None
-    retargeting_config = load_retargeting_config(retargeting_source) if retargeting_source is not None else None
+    teleoperation_mode_source = config_data.get("teleoperation_mode", app_data.get("teleoperation_mode"))
+    profile_config = load_retargeting_profile_config(profile_source) if profile_source is not None else None
+    detection_source_config = load_detection_source_config(detection_source) if detection_source is not None else None
+    robot_config = load_robot_config(profile_config.robot) if profile_config is not None else None
+    retargeting_config = load_retargeting_config(profile_config.method) if profile_config is not None else None
     solver_config = load_solver_config(solver_source)
-
-    hand_type = config_data.get("hand_type")
-    if hand_type is None and robot_config is not None:
-        hand_type = robot_config.hand_type
-    if hand_type is None:
-        hand_type = "leap"
+    teleoperation_mode_config = load_teleoperation_mode_config(teleoperation_mode_source)
 
     return {
         "result": config_data.get("result", app_data.get("result")),
         "data": config_data.get("data", app_data.get("data", DEFAULT_REPLAY_DATA)),
-        "hand_type": hand_type,
         "start": int(config_data.get("start", app_data.get("start", 0))),
         "end": int(config_data.get("end", app_data.get("end", -1))),
         "stride": int(config_data.get("stride", app_data.get("stride", 1))),
@@ -291,6 +297,9 @@ def resolve_replay_options_from_config(config: Any) -> dict[str, Any]:
         "trail_length": int(viewer_data.get("trail_length", 120)),
         "robot_config": robot_config,
         "retargeting_config": retargeting_config,
+        "retargeting_profile_config": profile_config,
+        "detection_source_config": detection_source_config,
+        "teleoperation_mode_config": teleoperation_mode_config,
         "solver_config": solver_config,
     }
 
@@ -331,12 +340,14 @@ def run_replay_viewer(options: dict[str, Any]) -> None:
     else:
         context, frames = build_retarget_replay_frames(
             data_file=options["data"],
-            hand_type=options["hand_type"],
             start=options["start"],
             end=options["end"],
             stride=options["stride"],
             robot_config=options["robot_config"],
             retargeting_config=options["retargeting_config"],
+            retargeting_profile_config=options["retargeting_profile_config"],
+            detection_source_config=options["detection_source_config"],
+            teleoperation_mode_config=options["teleoperation_mode_config"],
             solver_config=options["solver_config"],
         )
 

@@ -34,7 +34,8 @@ class RobotControl:
         self,
         robot_model: RobotPinocchio,
         robot_adaptor: RobotAdaptor,
-        hand_type: str = "leap",
+        initial_qpos: Optional[np.ndarray] = None,
+        arm_dof: int = 7,
         use_hardware: bool = False,
         use_virtual_hardware: bool = True,
         use_high_freq_interp: bool = False,
@@ -56,27 +57,21 @@ class RobotControl:
         else:
             self.env = RobotPinocchioEnv(robot_model, node)
 
-        self.init_joint_pos = np.zeros((self.robot_adaptor.doa))
-        # self.init_joint_pos[:7] = np.array([0, -np.pi / 4, 0, -3.0 / 4.0 * np.pi, 0, np.pi / 2.0, 1.0 / 4.0 * np.pi])
-        # self.init_joint_pos[:7] = [-1.32741069, 1.09424553, 1.24567741, -1.8431168, 0.5275045, 1.96928535, 0.37032922]
-        self.init_joint_pos[:7] = [
-            0.21511886,
-            -0.15896096,
-            -0.80094644,
-            -2.59708501,
-            -0.36324861,
-            2.30919053,
-            0.4965313,
-        ]
-        if hand_type == "leap":
-            self.init_joint_pos[7:] = [0, 0.1, 0.1, 0.1, 0, 0.1, 0.1, 0.1, 0, 0.1, 0.1, 0, 0.1, 0, 0.1, 0.1]
-        elif hand_type == "shadow":  # 22 joints
-            self.init_joint_pos[:7] = np.array(
-                [0, -np.pi / 4, 0, -3.0 / 4.0 * np.pi, 0, np.pi / 2.0, 1.5 / 4.0 * np.pi]
-            )
+        if not 0 < arm_dof <= self.robot_adaptor.doa:
+            raise ValueError(f"arm_dof must be in [1, {self.robot_adaptor.doa}], got {arm_dof}.")
+        self.arm_dof = arm_dof
+        if initial_qpos is None:
+            self.init_joint_pos = np.zeros((self.robot_adaptor.doa))
+            self.init_joint_pos[:7] = [
+                0.21511886,
+                -0.15896096,
+                -0.80094644,
+                -2.59708501,
+                -0.36324861,
+                2.30919053,
+                0.4965313,
+            ]
             self.init_joint_pos[7:] = [
-                0.1,
-                -0.1,
                 0,
                 0.1,
                 0.1,
@@ -88,18 +83,18 @@ class RobotControl:
                 0,
                 0.1,
                 0.1,
-                0.1,
-                0.1,
                 0,
                 0.1,
-                0.1,
-                0.1,
                 0,
-                0.1,
-                0.1,
                 0.1,
                 0.1,
             ]
+        else:
+            self.init_joint_pos = np.asarray(initial_qpos, dtype=float).copy()
+            if len(self.init_joint_pos) != self.robot_adaptor.doa:
+                raise ValueError(
+                    f"initial_qpos has {len(self.init_joint_pos)} values but robot adaptor has {self.robot_adaptor.doa}."
+                )
 
     def single_link_ik_nlopt(
         self,
@@ -156,10 +151,10 @@ class RobotControl:
     def single_link_ik_nlopt_arm_only(
         self,
         target_link_name: str,
-        hand_type: str,
         ref_link_pose: np.ndarray,
         weights: Optional[np.ndarray] = np.diag([10, 10, 10, 1, 1, 1]),
         qpos_init_arm: Optional[np.ndarray] = None,
+        arm_dof: Optional[int] = None,
     ):
         """
         Optimize only the arm joint angles without changing the hand (finger) joint angles.
@@ -169,6 +164,7 @@ class RobotControl:
             ref_link_pose: Reference link pose (4x4 homogeneous transformation matrix).
             weights: Weight matrix for position and orientation error.
             qpos_init_arm: Initial arm joint angles. If None, the current arm joint angles are used.
+            arm_dof: Number of leading actuated joints to optimize. If None, use the controller config.
         """
         # Decompose the target pose into position and orientation
         ref_link_pos, ref_link_ori = isometry3dToPosOri(ref_link_pose)
@@ -176,11 +172,10 @@ class RobotControl:
         # Get the current full joint configuration
         qpos_full_init = self.get_joint_pos(update=False)
         dof = len(qpos_full_init)
-        # Assume robot_adaptor provides indices for the arm and hand
-        if hand_type == "leap":
-            arm_indices = [0, 1, 2, 3, 4, 5, 6]
-        elif hand_type == "shadow":
-            arm_indices = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+        arm_dof = self.arm_dof if arm_dof is None else arm_dof
+        if not 0 < arm_dof <= dof:
+            raise ValueError(f"arm_dof must be in [1, {dof}], got {arm_dof}.")
+        arm_indices = list(range(arm_dof))
         hand_indices = [i for i in range(dof) if i not in arm_indices]
 
         # print(self.robot_model.dof_joint_names)
@@ -189,10 +184,7 @@ class RobotControl:
         if qpos_init_arm is None:
             qpos_init_arm = qpos_full_init[arm_indices]
         # Fixed hand joint angles (not optimized)
-        if hand_type == "leap":
-            qpos_hand_fixed = self.init_joint_pos[7:]
-        elif hand_type == "shadow":
-            qpos_hand_fixed = self.init_joint_pos[9:]
+        qpos_hand_fixed = self.init_joint_pos[arm_dof:]
 
         # print(f"qpos_init_arm: {qpos_init_arm}")
         # print(f"qpos_hand_fixed: {qpos_hand_fixed}")
@@ -235,10 +227,7 @@ class RobotControl:
 
             return total_cost
 
-        if hand_type == "leap":
-            opt_dim = 7
-        elif hand_type == "shadow":
-            opt_dim = 9
+        opt_dim = arm_dof
         opt = nlopt.opt(nlopt.LD_SLSQP, opt_dim)
         # Extract arm joint limits from the full joint limits
         joint_limits = self.robot_adaptor.backward_qpos(self.robot_model.joint_limits)

@@ -63,17 +63,16 @@ class _NoopSolver:
         return x_init.copy()
 
 
-def _ordered_targets(retargeting_config, hand_type):
+def _ordered_targets(profile_config):
     """Return target link names in the optimizer constructor format.
 
     Args:
-        retargeting_config: Loaded retargeting configuration.
-        hand_type: Robot hand type used to select a target block.
+        profile_config: Loaded robot-method retargeting profile configuration.
 
     Returns:
         Mapping with origin link names, task link names, and wrist link name.
     """
-    target_config = retargeting_config.targets_for(hand_type)
+    target_config = profile_config.target
     link_pairs = target_config.link_pairs
     return {
         "origin_links_name": [pair[0] for pair in link_pairs],
@@ -120,17 +119,18 @@ def build_vector_wrist_joint_regression_case(monkeypatch, optimizer_class_name="
     pytest.importorskip("torch")
 
     from retargeting import retarget_optimizer
-    from retargeting.config import load_retargeting_config, load_robot_config
+    from retargeting.config import load_retargeting_config, load_retargeting_profile_config, load_robot_config
     from retargeting.robot_adaptor import RobotAdaptor
     from retargeting.robot_pinocchio import RobotPinocchio
 
     monkeypatch.setattr(retarget_optimizer, "create_callback_solver", lambda _solver, _opt_dim: _NoopSolver())
 
     robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
-    retargeting_config = load_retargeting_config("configs/retargeting/vector_wrist_joint.yaml")
+    profile_config = load_retargeting_profile_config("configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml")
+    retargeting_config = load_retargeting_config(profile_config.method)
     robot_model = RobotPinocchio(robot_config.robot_file_path, robot_config.model.type)
     robot_adaptor = RobotAdaptor(robot_model, actuated_joints_name=list(robot_config.actuated_joints))
-    targets = _ordered_targets(retargeting_config, robot_config.hand_type)
+    targets = _ordered_targets(profile_config)
 
     optimizer_class = getattr(retarget_optimizer, optimizer_class_name)
     optimizer = optimizer_class(

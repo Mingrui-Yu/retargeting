@@ -99,8 +99,9 @@ python -m retargeting.viser_retargeting_visualize end=200
 The default Hydra replay config uses:
 
 - replay data: `tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz`
-- robot config: `configs/robots/panda_leap_paxini.yaml`
-- retargeting config: `configs/retargeting/vector_wrist_joint.yaml`
+- retargeting profile: `configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml`
+- robot config referenced by the profile: `configs/robots/panda_leap_paxini.yaml`
+- retargeting method config referenced by the profile: `configs/retargeting_methods/vector_wrist_joint.yaml`
 
 These paths load a promoted offline replay fixture. They do not start ROS, RViz, cameras, live Vision Pro streaming, or a real robot.
 
@@ -112,7 +113,7 @@ python -m pytest tests
 
 ## Configuration
 
-Robot-specific and retargeting-specific values are configured in YAML files instead of being edited directly in Python source.
+Robot-specific, method-specific, and robot-method profile values are configured in YAML files instead of being edited directly in Python source.
 
 | Config | Purpose |
 | --- | --- |
@@ -121,7 +122,9 @@ Robot-specific and retargeting-specific values are configured in YAML files inst
 | `configs/benchmark.yaml` | Hydra entry config for benchmark summaries and plots from saved results. |
 | `configs/robots/panda_leap_paxini.yaml` | Panda arm + Leap hand with Paxini fingertips. |
 | `configs/robots/panda_shadow.yaml` | Panda arm + Shadow hand. |
-| `configs/retargeting/vector_wrist_joint.yaml` | Vector wrist joint retargeting settings and link pairs. |
+| `configs/retargeting_methods/vector_wrist_joint.yaml` | Vector wrist joint method metadata and optimizer defaults. |
+| `configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml` | Panda+Leap profile binding robot, method, target links, objective weights, and teleoperation parameters. |
+| `configs/retargeting_profiles/vector_wrist_joint_panda_shadow.yaml` | Panda+Shadow profile binding robot, method, target links, objective weights, and teleoperation parameters. |
 | `configs/solvers/nlopt_slsqp.yaml` | NLopt SLSQP backend and stopping/runtime parameters. |
 | `configs/solvers/scipy_slsqp.yaml` | SciPy SLSQP backend and stopping/runtime parameters. |
 | `configs/apps/replay_avp.yaml` | Offline replay app defaults. |
@@ -130,7 +133,7 @@ Replay uses Hydra config groups. Override groups and values from the command lin
 
 ```bash
 python -m retargeting.viser_retargeting_visualize \
-  robots=panda_shadow \
+  retargeting_profiles=vector_wrist_joint_panda_shadow \
   solvers=scipy_slsqp \
   data=tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz \
   viewer.port=8090 \
@@ -141,9 +144,7 @@ Legacy argparse-style flags remain available for older scripts:
 
 ```bash
 python -m retargeting.viser_retargeting_visualize \
-  --robot configs/robots/panda_shadow.yaml \
-  --retarget configs/retargeting/vector_wrist_joint.yaml \
-  --hand-type shadow
+  --profile configs/retargeting_profiles/vector_wrist_joint_panda_shadow.yaml
 ```
 
 When adding a new robot, prefer this route:
@@ -151,7 +152,8 @@ When adding a new robot, prefer this route:
 1. Add robot assets under `assets/robots/<robot_name>/`.
 2. Add a robot config under `configs/robots/<robot_name>.yaml`.
 3. Put joints, frames, model paths, initial qpos, and hand scale in the config.
-4. Keep retargeting link pairs and objective settings in `configs/retargeting/`.
+4. Put robot-method-specific target links, objective weights, and teleoperation parameters in `configs/retargeting_profiles/<method>_<robot_name>.yaml`.
+5. Reuse or add method-level optimizer defaults under `configs/retargeting_methods/`.
 
 Avoid hard-coding robot-specific joint names, link names, URDF paths, or initial poses in core Python modules.
 
@@ -318,7 +320,7 @@ python -c "import retargeting; import retargeting_ros"
 Check Hydra replay config composition without starting the viewer:
 
 ```bash
-python -c "from retargeting.viser_retargeting_visualize import compose_hydra_replay_config; cfg = compose_hydra_replay_config(['robots=panda_shadow','solvers=scipy_slsqp','viewer.port=8090']); print(cfg['robot']['name'], cfg['solver']['name'], cfg['viewer']['port'])"
+python -c "from retargeting.viser_retargeting_visualize import compose_hydra_replay_config; cfg = compose_hydra_replay_config(['retargeting_profiles=vector_wrist_joint_panda_shadow','solvers=scipy_slsqp','viewer.port=8090']); print(cfg['profile']['name'], cfg['solver']['name'], cfg['viewer']['port'])"
 ```
 
 Check Hydra offline retarget config composition:

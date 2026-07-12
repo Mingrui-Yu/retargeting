@@ -1,6 +1,5 @@
 # @package robot
 name: panda_leap_paxini
-hand_type: leap
 model:
   type: urdf
   path: assets/robots/panda_leap_paxini/urdf/panda_leap_paxini.urdf

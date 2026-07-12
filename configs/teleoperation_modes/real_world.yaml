@@ -1,0 +1,9 @@
+# @package teleoperation_mode
+name: real_world
+robot_control:
+  use_hardware: true
+  use_virtual_hardware: false
+  use_high_freq_interp: true
+output:
+  smooth_output_qpos: true
+  smoothing_alpha: 0.3

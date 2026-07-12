@@ -4,15 +4,21 @@ from typing import Dict, List, Optional
 
 import numpy as np
 from retargeting.config import (
+    DetectionSourceConfig,
     RobotBenchmarkConfig,
     RetargetingConfig,
+    RetargetingProfileConfig,
     RobotConfig,
+    RobotTeleoperationConfig,
     SolverConfig,
-    default_robot_config_path,
+    TeleoperationModeConfig,
     default_solver_config,
+    load_detection_source_config,
     load_retargeting_config,
+    load_retargeting_profile_config,
     load_robot_config,
     load_solver_config,
+    load_teleoperation_mode_config,
     to_plain_config_data,
 )
 from retargeting.offline_replay import OfflineReplay, iter_frame_indices, load_offline_replay
@@ -21,66 +27,21 @@ from retargeting.robot_pinocchio import RobotPinocchio
 from retargeting.trajectory_result import RetargetingRunMetadata, RetargetingTrajectory
 from scipy.spatial.transform import Rotation as sciR
 from retargeting.utils.utils_calc import posRotMat2Isometry3d, transformPositions
-from retargeting.vision_pro_detector import parse_vision_pro_stream_frame
+from retargeting.avp_detector import parse_avp_stream_frame
 
 
-LEAP_ACTUATED_JOINTS_NAME = [f"panda_joint{i + 1}" for i in range(7)] + [f"joint_{i}" for i in range(16)]
-LEAP_VISUAL_FRAME_NAMES = [
-    "wrist",
-    "thumb_tip_center",
-    "finger1_tip_center",
-    "finger2_tip_center",
-    "finger3_tip_center",
-    "thumb_tip_center_lower",
-    "finger1_tip_center_lower",
-    "finger2_tip_center_lower",
-    "finger3_tip_center_lower",
-]
-
-SHADOW_ACTUATED_JOINTS_NAME = [f"panda_joint{i + 1}" for i in range(7)] + [
-    "WRJ2",
-    "WRJ1",
-    "FFJ4",
-    "FFJ3",
-    "FFJ2",
-    "FFJ1",
-    "LFJ5",
-    "LFJ4",
-    "LFJ3",
-    "LFJ2",
-    "LFJ1",
-    "MFJ4",
-    "MFJ3",
-    "MFJ2",
-    "MFJ1",
-    "RFJ4",
-    "RFJ3",
-    "RFJ2",
-    "RFJ1",
-    "THJ5",
-    "THJ4",
-    "THJ3",
-    "THJ2",
-    "THJ1",
-]
-SHADOW_VISUAL_FRAME_NAMES = [
-    "ee_link",
-    "thtip",
-    "fftip",
-    "mftip",
-    "rftip",
-    "lftip",
-    "thdistal",
-    "ffdistal",
-    "mfdistal",
-    "rfdistal",
-    "lfdistal",
-]
+DEFAULT_RETARGETING_PROFILE_CONFIG_PATH = "configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"
+DEFAULT_DETECTION_SOURCE_CONFIG_PATH = "configs/detection_sources/avp.yaml"
+DEFAULT_PROFILE_CONFIG_PATHS_BY_ROBOT_NAME = {
+    "panda_leap_paxini": DEFAULT_RETARGETING_PROFILE_CONFIG_PATH,
+    "panda_shadow": "configs/retargeting_profiles/vector_wrist_joint_panda_shadow.yaml",
+}
 
 
 @dataclass
 class RobotReplayContext:
-    hand_type: str
+    robot_config: RobotConfig
+    robot_name: str
     robot_file_path: str
     robot_model: RobotPinocchio
     robot_adaptor: RobotAdaptor
@@ -90,6 +51,9 @@ class RobotReplayContext:
     wrist_frame_name: str
     human_hand_scale: float
     benchmark_config: RobotBenchmarkConfig
+    teleoperation_config: RobotTeleoperationConfig
+    detection_source_config: DetectionSourceConfig
+    retargeting_profile_config: RetargetingProfileConfig
 
 
 @dataclass
@@ -101,10 +65,6 @@ class RetargetReplayFrame:
     qpos: Optional[np.ndarray]
     robot_frame_poses: Dict[str, np.ndarray]
     err: Optional[Dict[str, object]] = None
-
-
-def get_default_init_joint_pos(hand_type: str) -> np.ndarray:
-    return np.asarray(load_robot_config(default_robot_config_path(hand_type)).initial_qpos, dtype=float)
 
 
 def robot_config_to_metadata_dict(robot_config: RobotConfig) -> dict:
@@ -137,33 +97,71 @@ def retargeting_config_to_metadata_dict(retargeting_config: RetargetingConfig) -
                 "class": retargeting_config.optimizer_class,
                 "params": retargeting_config.optimizer_params,
             },
-            "targets": {
-                hand_type: asdict(target) for hand_type, target in retargeting_config.targets.items()
-            },
-            "joint_limit_overrides": [
-                asdict(override) for override in retargeting_config.joint_limit_overrides
-            ],
         }
     )
 
 
-def pose_from_avp_world_to_robot_world(pose_in_avp_world: np.ndarray) -> np.ndarray:
+def retargeting_profile_config_to_metadata_dict(profile_config: RetargetingProfileConfig) -> dict:
+    """Convert a retargeting profile config object to metadata-safe plain data.
+
+    Args:
+        profile_config: Typed robot-method retargeting profile config.
+
+    Returns:
+        Plain dictionary that can be embedded in metadata.yaml.
+    """
+    return to_plain_config_data(asdict(profile_config))
+
+
+def detection_source_config_to_metadata_dict(detection_source_config: DetectionSourceConfig) -> dict:
+    """Convert a detection source config object to metadata-safe plain data.
+
+    Args:
+        detection_source_config: Typed detector source calibration config.
+
+    Returns:
+        Plain dictionary that can be embedded in metadata.yaml.
+    """
+    return to_plain_config_data(asdict(detection_source_config))
+
+
+def pose_from_detection_world_to_robot_world(
+    pose_in_detection_world: np.ndarray,
+    detection_source_config: DetectionSourceConfig,
+) -> np.ndarray:
+    """Transform a detector-source wrist pose into the configured robot world frame.
+
+    Args:
+        pose_in_detection_world: 4x4 wrist pose matrix in the detector source world frame.
+        detection_source_config: Detector source calibration config.
+
+    Returns:
+        4x4 wrist pose matrix in the robot world frame.
+    """
     transform = posRotMat2Isometry3d(
-        pos=[0, 0, 0], rot_mat=sciR.from_euler("xyz", [0, 0, 180], degrees=True).as_matrix()
+        pos=[0, 0, 0],
+        rot_mat=sciR.from_euler(
+            "xyz", detection_source_config.rotation_euler_xyz_deg, degrees=True
+        ).as_matrix(),
     )
-    pose_in_world = transform @ pose_in_avp_world
-    pose_in_world[:3, 3] += [0.7, 0.2, -1.0]
+    pose_in_world = transform @ pose_in_detection_world
+    pose_in_world[:3, 3] += np.asarray(detection_source_config.translation)
     return pose_in_world
 
 
-def create_robot_replay_context_from_config(robot_config: RobotConfig) -> RobotReplayContext:
+def create_robot_replay_context_from_config(
+    robot_config: RobotConfig,
+    retargeting_profile_config: RetargetingProfileConfig,
+    detection_source_config: DetectionSourceConfig,
+) -> RobotReplayContext:
     robot_model = RobotPinocchio(robot_file_path=robot_config.robot_file_path, robot_file_type=robot_config.model.type)
     robot_adaptor = RobotAdaptor(
         robot_model=robot_model,
         actuated_joints_name=list(robot_config.actuated_joints),
     )
     return RobotReplayContext(
-        hand_type=robot_config.hand_type,
+        robot_config=robot_config,
+        robot_name=robot_config.name,
         robot_file_path=robot_config.robot_file_path,
         robot_model=robot_model,
         robot_adaptor=robot_adaptor,
@@ -173,6 +171,9 @@ def create_robot_replay_context_from_config(robot_config: RobotConfig) -> RobotR
         wrist_frame_name=robot_config.wrist_frame_name,
         human_hand_scale=robot_config.human_hand_scale,
         benchmark_config=robot_config.benchmark,
+        teleoperation_config=retargeting_profile_config.teleoperation,
+        detection_source_config=detection_source_config,
+        retargeting_profile_config=retargeting_profile_config,
     )
 
 
@@ -185,11 +186,25 @@ def create_robot_replay_context_from_metadata(metadata: RetargetingRunMetadata) 
     Returns:
         Robot replay context reconstructed from the embedded robot config.
     """
-    return create_robot_replay_context_from_config(load_robot_config(metadata.robot_config))
+    robot_config = load_robot_config(metadata.robot_config)
+    profile_source = metadata.extra.get("retargeting_profile_config")
+    if profile_source is None:
+        profile_source = DEFAULT_PROFILE_CONFIG_PATHS_BY_ROBOT_NAME.get(robot_config.name)
+        if profile_source is None:
+            raise ValueError(f"No default retargeting profile configured for robot: {robot_config.name}")
+    profile_config = load_retargeting_profile_config(profile_source)
+    detection_source = metadata.extra.get("detection_source_config", DEFAULT_DETECTION_SOURCE_CONFIG_PATH)
+    detection_source_config = load_detection_source_config(detection_source)
+    return create_robot_replay_context_from_config(robot_config, profile_config, detection_source_config)
 
 
-def create_robot_replay_context(hand_type: str = "leap") -> RobotReplayContext:
-    return create_robot_replay_context_from_config(load_robot_config(default_robot_config_path(hand_type)))
+def create_robot_replay_context(
+    profile_config_path: str | Path = DEFAULT_RETARGETING_PROFILE_CONFIG_PATH,
+    detection_source_config_path: str | Path = DEFAULT_DETECTION_SOURCE_CONFIG_PATH,
+) -> RobotReplayContext:
+    profile_config = load_retargeting_profile_config(profile_config_path)
+    detection_source_config = load_detection_source_config(detection_source_config_path)
+    return create_robot_replay_context_from_config(load_robot_config(profile_config.robot), profile_config, detection_source_config)
 
 
 def compute_robot_frame_poses(
@@ -214,30 +229,33 @@ def get_initial_alignment_poses(
         context.wrist_frame_name,
         qpos=context.robot_adaptor.forward_qpos(context.init_joint_pos),
     )
-    _, _, _, wrist_pose_in_avp_world = parse_vision_pro_stream_frame(replay.streams[first_frame_idx])
-    init_avp_wrist_pose = pose_from_avp_world_to_robot_world(wrist_pose_in_avp_world)
-    return init_robot_wrist_pose, init_avp_wrist_pose
+    _, _, _, wrist_pose_in_detection_world = parse_avp_stream_frame(replay.streams[first_frame_idx])
+    init_detection_wrist_pose = pose_from_detection_world_to_robot_world(
+        wrist_pose_in_detection_world, context.detection_source_config
+    )
+    return init_robot_wrist_pose, init_detection_wrist_pose
 
 
 def create_retargeter(
     context: RobotReplayContext,
-    retargeting_config: Optional[RetargetingConfig] = None,
+    method_config: Optional[RetargetingConfig] = None,
+    teleoperation_mode_config: TeleoperationModeConfig | None = None,
     solver_config: SolverConfig | None = None,
 ):
     from retargeting.robot_teleoperation import RobotTeleoperation
 
+    if teleoperation_mode_config is None:
+        teleoperation_mode_config = load_teleoperation_mode_config(None)
+
     return RobotTeleoperation(
-        hand_type=context.hand_type,
         robot_adaptor=context.robot_adaptor,
         robot_control=None,
-        qpos_init=context.init_joint_pos.copy(),
-        input_device="vision_pro",
-        mujoco_vis=False,
-        use_real_hardware=False,
-        retargeting_config=retargeting_config,
+        robot_config=context.robot_config,
+        profile_config=context.retargeting_profile_config,
+        method_config=method_config,
+        detection_source_config=context.detection_source_config,
+        teleoperation_mode_config=teleoperation_mode_config,
         solver_config=solver_config,
-        human_hand_scale=context.human_hand_scale,
-        benchmark_config=context.benchmark_config,
     )
 
 
@@ -315,30 +333,40 @@ def trajectory_to_replay_frames(
 
 def run_offline_retargeting(
     data_file: str,
-    hand_type: str = "leap",
     start: int = 0,
     end: int = -1,
     stride: int = 1,
     robot_config: RobotConfig | None = None,
     retargeting_config: RetargetingConfig | None = None,
+    retargeting_profile_config: RetargetingProfileConfig | None = None,
+    detection_source_config: DetectionSourceConfig | None = None,
+    teleoperation_mode_config: TeleoperationModeConfig | None = None,
     solver_config: SolverConfig | None = None,
     robot_config_path: str | Path | None = None,
     retargeting_config_path: str | Path | None = None,
+    retargeting_profile_config_path: str | Path | None = None,
+    detection_source_config_path: str | Path | None = None,
+    teleoperation_mode_config_path: str | Path | None = None,
     solver_config_path: str | Path | None = None,
 ) -> tuple[RobotReplayContext, RetargetingTrajectory, RetargetingRunMetadata]:
     """Run offline retargeting and return a persistent trajectory artifact in memory.
 
     Args:
         data_file: Offline AVP replay file.
-        hand_type: Default hand type used when no robot config is provided.
         start: First input frame index.
         end: Last input frame index, inclusive; negative means the final frame.
         stride: Frame stride.
         robot_config: Optional already-loaded robot config.
-        retargeting_config: Optional already-loaded retargeting config.
+        retargeting_config: Optional already-loaded retargeting method config.
+        retargeting_profile_config: Optional already-loaded robot-method profile config.
+        detection_source_config: Optional already-loaded detection source config.
+        teleoperation_mode_config: Optional already-loaded teleoperation runtime mode config.
         solver_config: Optional already-loaded solver config.
         robot_config_path: Optional robot config path.
-        retargeting_config_path: Optional retargeting config path.
+        retargeting_config_path: Optional retargeting method config path.
+        retargeting_profile_config_path: Optional retargeting profile config path.
+        detection_source_config_path: Optional detection source config path.
+        teleoperation_mode_config_path: Optional teleoperation runtime mode config path.
         solver_config_path: Optional solver config path.
 
     Returns:
@@ -349,31 +377,57 @@ def run_offline_retargeting(
     if not frame_indices:
         raise ValueError("No replay frames selected.")
 
+    if retargeting_profile_config is None:
+        retargeting_profile_config = load_retargeting_profile_config(
+            retargeting_profile_config_path
+            if retargeting_profile_config_path is not None
+            else DEFAULT_RETARGETING_PROFILE_CONFIG_PATH
+        )
+    if detection_source_config is None:
+        detection_source_config = load_detection_source_config(
+            detection_source_config_path
+            if detection_source_config_path is not None
+            else DEFAULT_DETECTION_SOURCE_CONFIG_PATH
+        )
+    if detection_source_config.input_device != "avp":
+        raise ValueError("Offline replay currently requires an avp detection source.")
     if robot_config is None:
         robot_config = (
             load_robot_config(robot_config_path)
             if robot_config_path is not None
-            else load_robot_config(default_robot_config_path(hand_type))
+            else load_robot_config(retargeting_profile_config.robot)
         )
     if retargeting_config is None:
         retargeting_config = (
-            load_retargeting_config(retargeting_config_path) if retargeting_config_path is not None else None
+            load_retargeting_config(retargeting_config_path)
+            if retargeting_config_path is not None
+            else load_retargeting_config(retargeting_profile_config.method)
         )
+    if teleoperation_mode_config is None:
+        teleoperation_mode_config = load_teleoperation_mode_config(teleoperation_mode_config_path)
     if solver_config is None:
         solver_config = load_solver_config(solver_config_path) if solver_config_path is not None else default_solver_config()
 
-    context = create_robot_replay_context_from_config(robot_config)
-    init_robot_wrist_pose, init_avp_wrist_pose = get_initial_alignment_poses(replay, context, frame_indices[0])
+    retargeting_profile_config.validate(robot_config)
+    context = create_robot_replay_context_from_config(robot_config, retargeting_profile_config, detection_source_config)
+    init_robot_wrist_pose, init_detection_wrist_pose = get_initial_alignment_poses(replay, context, frame_indices[0])
 
-    retargeter = create_retargeter(context, retargeting_config=retargeting_config, solver_config=solver_config)
+    retargeter = create_retargeter(
+        context,
+        method_config=retargeting_config,
+        teleoperation_mode_config=teleoperation_mode_config,
+        solver_config=solver_config,
+    )
     retargeter.set_robot_init_wrist_pose(init_robot_wrist_pose)
-    retargeter.set_avp_init_wrist_pose(init_avp_wrist_pose)
+    retargeter.set_detection_source_init_wrist_pose(init_detection_wrist_pose)
 
     frames: List[RetargetReplayFrame] = []
     for frame_idx in frame_indices:
-        hand_kps_wrist, wrist_pose_world, qpos, err = retargeter.vision_pro_retarget(stream=replay.streams[frame_idx])
-        if hand_kps_wrist is None:
+        observation, qpos, err = retargeter.retarget_input(replay.streams[frame_idx])
+        if observation is None:
             continue
+        hand_kps_wrist = observation.hand_kps_in_wrist
+        wrist_pose_world = observation.wrist_pose_in_world
         hand_kps_world = transformPositions(hand_kps_wrist, target_frame_pose_inv=wrist_pose_world)
 
         frames.append(
@@ -400,47 +454,69 @@ def run_offline_retargeting(
         stride=stride,
         num_frames=trajectory.n_frames,
         qpos_dim=trajectory.qpos_dim,
+        extra={
+            "retargeting_profile_config": retargeting_profile_config_to_metadata_dict(retargeting_profile_config),
+            "detection_source_config": detection_source_config_to_metadata_dict(detection_source_config),
+        },
     )
     return context, trajectory, metadata
 
 
 def build_retarget_replay_frames(
     data_file: str,
-    hand_type: str = "leap",
     start: int = 0,
     end: int = -1,
     stride: int = 1,
     robot_config: RobotConfig | None = None,
     retargeting_config: RetargetingConfig | None = None,
+    retargeting_profile_config: RetargetingProfileConfig | None = None,
+    detection_source_config: DetectionSourceConfig | None = None,
+    teleoperation_mode_config: TeleoperationModeConfig | None = None,
+    solver_config: SolverConfig | None = None,
     robot_config_path: str | Path | None = None,
     retargeting_config_path: str | Path | None = None,
+    retargeting_profile_config_path: str | Path | None = None,
+    detection_source_config_path: str | Path | None = None,
+    teleoperation_mode_config_path: str | Path | None = None,
 ) -> tuple[RobotReplayContext, List[RetargetReplayFrame]]:
     """Build viewer replay frames by running offline retargeting.
 
     Args:
         data_file: Offline AVP replay file.
-        hand_type: Default hand type used when no robot config is provided.
         start: First input frame index.
         end: Last input frame index, inclusive; negative means the final frame.
         stride: Frame stride.
         robot_config: Optional already-loaded robot config.
-        retargeting_config: Optional already-loaded retargeting config.
+        retargeting_config: Optional already-loaded retargeting method config.
+        retargeting_profile_config: Optional already-loaded retargeting profile config.
+        detection_source_config: Optional already-loaded detection source config.
+        teleoperation_mode_config: Optional already-loaded teleoperation runtime mode config.
+        solver_config: Optional already-loaded solver config.
         robot_config_path: Optional robot config path.
-        retargeting_config_path: Optional retargeting config path.
+        retargeting_config_path: Optional retargeting method config path.
+        retargeting_profile_config_path: Optional retargeting profile config path.
+        detection_source_config_path: Optional detection source config path.
+        teleoperation_mode_config_path: Optional teleoperation runtime mode config path.
 
     Returns:
         Tuple of robot replay context and replay frames suitable for visualization.
     """
     context, trajectory, _ = run_offline_retargeting(
         data_file=data_file,
-        hand_type=hand_type,
         start=start,
         end=end,
         stride=stride,
         robot_config=robot_config,
         retargeting_config=retargeting_config,
+        retargeting_profile_config=retargeting_profile_config,
+        detection_source_config=detection_source_config,
+        teleoperation_mode_config=teleoperation_mode_config,
+        solver_config=solver_config,
         robot_config_path=robot_config_path,
         retargeting_config_path=retargeting_config_path,
+        retargeting_profile_config_path=retargeting_profile_config_path,
+        detection_source_config_path=detection_source_config_path,
+        teleoperation_mode_config_path=teleoperation_mode_config_path,
     )
     frames = trajectory_to_replay_frames(context, trajectory)
     return context, frames

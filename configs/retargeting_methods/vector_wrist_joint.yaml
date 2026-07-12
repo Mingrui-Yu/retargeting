@@ -1,0 +1,9 @@
+# @package method
+name: vector_wrist_joint
+type: VECTOR_WRIST_JOINT
+setting_id: 3
+ablation_option: 0
+optimizer:
+  class: VectorWristJointOptimizerV2
+  params:
+    huber_delta: 0.02

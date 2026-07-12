@@ -1,0 +1,107 @@
+# @package profile
+name: vector_wrist_joint_panda_leap_paxini
+robot: configs/robots/panda_leap_paxini.yaml
+method: configs/retargeting_methods/vector_wrist_joint.yaml
+target:
+  wrist_link_name: wrist
+  link_pairs:
+    - [world, thumb_tip_center]
+    - [wrist, thumb_tip_center]
+    - [wrist, finger1_tip_center]
+    - [wrist, finger2_tip_center]
+    - [wrist, finger3_tip_center]
+    - [thumb_tip_center, finger1_tip_center]
+    - [thumb_tip_center, finger2_tip_center]
+    - [thumb_tip_center, finger3_tip_center]
+    - [thumb_tip_center_lower, thumb_tip_center]
+    - [finger1_tip_center_lower, finger1_tip_center]
+    - [finger2_tip_center_lower, finger2_tip_center]
+    - [finger3_tip_center_lower, finger3_tip_center]
+objective:
+  pinch_transition_threshold: 0.1
+  pinch_contact_threshold: 0.01
+  pinch_sigmoid_slope: 10.0
+  weights:
+    world_thumb: 10.0
+    wrist_fingertip: 1.0
+    thumb_primary: 10.0
+    fingertip_orientation: 10.0
+    wrist_rotation: 0.1
+    arm_link_vector: 10.0
+    arm_wrist_rotation: 1.0
+teleoperation:
+  arm_dof: 7
+  human_wrist_index: 0
+  joint_position_weights:
+    - 0
+    - 0
+    - 1.0
+    - 0
+    - 0.5
+    - 0
+    - 0
+    - 0.5
+    - 0
+    - 0
+    - 0
+    - 0.5
+    - 0
+    - 0
+    - 0
+    - 0.5
+    - 0
+    - 0
+    - 0.5
+    - 0
+    - 0.1
+    - 0
+    - 0
+  joint_velocity_weights:
+    - 0.1
+    - 0.1
+    - 0.1
+    - 0.1
+    - 0.1
+    - 0.1
+    - 0.1
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+  max_joint_speed:
+    - 0.2
+    - 0.2
+    - 0.2
+    - 0.2
+    - 0.2
+    - 0.2
+    - 0.5
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+joint_limit_overrides: []

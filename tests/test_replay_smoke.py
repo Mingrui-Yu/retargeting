@@ -88,10 +88,10 @@ def test_avp_teleop_replay_fixture_shape_and_expected_qpos():
     np.testing.assert_allclose(data["retarget_qpos"][0], expected_first_qpos, rtol=0, atol=1e-12)
 
 
-def test_vision_pro_detector_static_detect_headless(monkeypatch):
-    # Exercise only VisionProDetector.detect(), which is a pure parser for an
+def test_avp_detector_static_detect_headless(monkeypatch):
+    # Exercise only AvpDetector.detect(), which is a pure parser for an
     # already-recorded stream frame. A fake avp_stream module avoids requiring
-    # the live Vision Pro dependency on the server.
+    # the live AVP dependency on the server.
     _np()
     pytest.importorskip("scipy")
 
@@ -99,11 +99,11 @@ def test_vision_pro_detector_static_detect_headless(monkeypatch):
     fake_avp_stream.VisionProStreamer = object
     monkeypatch.setitem(sys.modules, "avp_stream", fake_avp_stream)
 
-    from retargeting.vision_pro_detector import VisionProDetector
+    from retargeting.avp_detector import AvpDetector
 
     data = _load_fixture()
     stream = _stream_frame(data, frame_idx=0)
-    num_box, hand_kps, _, wrist_pose = VisionProDetector.detect(stream)
+    num_box, hand_kps, _, wrist_pose = AvpDetector.detect(stream)
 
     assert num_box == 1
     assert hand_kps.shape == (21, 3)
@@ -170,12 +170,13 @@ def test_vector_wrist_joint_optimizer_single_frame_smoke():
     pytest.importorskip("torch")
 
     from retargeting.retarget_optimizer import VectorWristJointOptimizer
-    from retargeting.config import load_retargeting_config, load_robot_config, load_solver_config
+    from retargeting.config import load_retargeting_config, load_retargeting_profile_config, load_robot_config, load_solver_config
     from retargeting.robot_adaptor import RobotAdaptor
     from retargeting.robot_pinocchio import RobotPinocchio
 
     robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
-    retargeting_config = load_retargeting_config("configs/retargeting/vector_wrist_joint.yaml")
+    profile_config = load_retargeting_profile_config("configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml")
+    retargeting_config = load_retargeting_config(profile_config.method)
     solver_config = load_solver_config("configs/solvers/nlopt_slsqp.yaml")
     robot_model = RobotPinocchio(robot_config.robot_file_path, robot_config.model.type)
     adaptor = RobotAdaptor(
@@ -183,7 +184,7 @@ def test_vector_wrist_joint_optimizer_single_frame_smoke():
         actuated_joints_name=list(robot_config.actuated_joints),
     )
 
-    target_config = retargeting_config.targets_for(robot_config.hand_type)
+    target_config = profile_config.target
     target_link_pairs = target_config.link_pairs
     optimizer = VectorWristJointOptimizer(
         robot_adaptor=adaptor,
@@ -199,7 +200,7 @@ def test_vector_wrist_joint_optimizer_single_frame_smoke():
                 "lower": override.lower,
                 "upper": override.upper,
             }
-            for override in retargeting_config.joint_limit_overrides
+            for override in profile_config.joint_limit_overrides
         ],
     )
 
@@ -231,13 +232,14 @@ def test_vector_wrist_joint_optimizer_scipy_slsqp_single_frame_smoke():
     pytest.importorskip("scipy")
     pytest.importorskip("torch")
 
-    from retargeting.config import load_retargeting_config, load_robot_config, load_solver_config
+    from retargeting.config import load_retargeting_config, load_retargeting_profile_config, load_robot_config, load_solver_config
     from retargeting.retarget_optimizer import VectorWristJointOptimizer
     from retargeting.robot_adaptor import RobotAdaptor
     from retargeting.robot_pinocchio import RobotPinocchio
 
     robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
-    retargeting_config = load_retargeting_config("configs/retargeting/vector_wrist_joint.yaml")
+    profile_config = load_retargeting_profile_config("configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml")
+    retargeting_config = load_retargeting_config(profile_config.method)
     solver_config = load_solver_config("configs/solvers/scipy_slsqp.yaml")
     robot_model = RobotPinocchio(robot_config.robot_file_path, robot_config.model.type)
     adaptor = RobotAdaptor(
@@ -245,7 +247,7 @@ def test_vector_wrist_joint_optimizer_scipy_slsqp_single_frame_smoke():
         actuated_joints_name=list(robot_config.actuated_joints),
     )
 
-    target_config = retargeting_config.targets_for(robot_config.hand_type)
+    target_config = profile_config.target
     target_link_pairs = target_config.link_pairs
     optimizer = VectorWristJointOptimizer(
         robot_adaptor=adaptor,
@@ -261,7 +263,7 @@ def test_vector_wrist_joint_optimizer_scipy_slsqp_single_frame_smoke():
                 "lower": override.lower,
                 "upper": override.upper,
             }
-            for override in retargeting_config.joint_limit_overrides
+            for override in profile_config.joint_limit_overrides
         ],
         solver="scipy_slsqp",
     )

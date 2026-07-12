@@ -1,0 +1,7 @@
+# @package detection_source
+name: rgb
+input_device: rgb
+world_to_robot:
+  rotation_euler_xyz_deg: [0.0, 0.0, 0.0]
+  translation: [0.4, 0.0, 0.0]
+use_relative_wrist_alignment: false

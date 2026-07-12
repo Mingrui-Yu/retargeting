@@ -1,8 +1,8 @@
 # @package app
 data: tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz
 result: null
-robot: configs/robots/panda_leap_paxini.yaml
-retargeting: configs/retargeting/vector_wrist_joint.yaml
+profile: configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml
+detection_source: configs/detection_sources/avp.yaml
 solver: configs/solvers/nlopt_slsqp.yaml
 start: 0
 end: -1

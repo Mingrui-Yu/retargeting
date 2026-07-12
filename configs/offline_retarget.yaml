@@ -1,12 +1,12 @@
 defaults:
   - apps: offline_retarget_avp
-  - robots: panda_leap_paxini
-  - retargeting: vector_wrist_joint
+  - retargeting_profiles: vector_wrist_joint_panda_leap_paxini
+  - detection_sources: avp
+  - teleoperation_modes: simulation
   - solvers: nlopt_slsqp
   - _self_
 
 data: ${app.data}
-hand_type: ${robot.hand_type}
 start: ${app.start}
 end: ${app.end}
 stride: ${app.stride}

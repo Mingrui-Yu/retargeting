@@ -6,13 +6,16 @@ from pathlib import Path
 from typing import Any
 
 from retargeting.config import (
+    load_detection_source_config,
     load_retargeting_config,
+    load_retargeting_profile_config,
     load_robot_config,
     load_solver_config,
+    load_teleoperation_mode_config,
     resolve_project_path,
     to_plain_config_data,
 )
-from retargeting.retargeting_replay import run_offline_retargeting
+from retargeting.retargeting_replay import DEFAULT_DETECTION_SOURCE_CONFIG_PATH, run_offline_retargeting
 from retargeting.trajectory_result import save_retargeting_trajectory
 
 
@@ -117,8 +120,7 @@ def build_post_benchmark_config(config_data: dict[str, Any], output_dir: Path) -
 def build_post_visualize_config(
     config_data: dict[str, Any],
     output_dir: Path,
-    robot_source: Any,
-    retargeting_source: Any,
+    profile_source: Any,
     solver_source: Any,
 ) -> dict[str, Any]:
     """Build the replay viewer config used after offline retargeting.
@@ -126,8 +128,7 @@ def build_post_visualize_config(
     Args:
         config_data: Plain composed offline retarget config.
         output_dir: Directory containing the just-saved retargeting artifact.
-        robot_source: Robot config source already used for retargeting.
-        retargeting_source: Retargeting config source already used for retargeting.
+        profile_source: Retargeting profile config source already used for retargeting.
         solver_source: Solver config source already used for retargeting.
 
     Returns:
@@ -143,12 +144,13 @@ def build_post_visualize_config(
     return {
         "result": str(output_dir),
         "data": config_data.get("data"),
-        "hand_type": config_data.get("hand_type"),
+        "detection_source": config_data.get(
+            "detection_source", config_data.get("app", {}).get("detection_source", DEFAULT_DETECTION_SOURCE_CONFIG_PATH)
+        ),
         "start": int(config_data.get("start", 0)),
         "end": int(config_data.get("end", -1)),
         "stride": int(config_data.get("stride", 1)),
-        "robot": robot_source,
-        "retargeting": retargeting_source,
+        "profile": profile_source,
         "solver": solver_source,
         "viewer": {
             "fps": float(viewer_data.get("fps", 20.0)),
@@ -190,8 +192,7 @@ def run_visualize_post_action(config: dict[str, Any]) -> None:
 def run_post_retarget_actions(
     config_data: dict[str, Any],
     output_dir: Path,
-    robot_source: Any,
-    retargeting_source: Any,
+    profile_source: Any,
     solver_source: Any | None = None,
 ) -> list[str]:
     """Run enabled offline retarget post actions.
@@ -199,8 +200,7 @@ def run_post_retarget_actions(
     Args:
         config_data: Plain composed offline retarget config.
         output_dir: Directory containing the just-saved retargeting artifact.
-        robot_source: Robot config source already used for retargeting.
-        retargeting_source: Retargeting config source already used for retargeting.
+        profile_source: Retargeting profile config source already used for retargeting.
         solver_source: Solver config source already used for retargeting.
 
     Returns:
@@ -219,7 +219,7 @@ def run_post_retarget_actions(
     if _post_action_enabled(config_data, "visualize"):
         print(f"Starting replay viewer for {output_dir}")
         run_visualize_post_action(
-            build_post_visualize_config(config_data, output_dir, robot_source, retargeting_source, solver_source)
+            build_post_visualize_config(config_data, output_dir, profile_source, solver_source)
         )
         completed_actions.append("visualize")
 
@@ -241,12 +241,18 @@ def run_offline_retarget_from_config(config: Any, argv: list[str] | None = None)
         raise ValueError("Expected offline retarget config to be a mapping.")
 
     app_data = config_data.get("app", {})
-    robot_source = config_data.get("robot", app_data.get("robot"))
-    retargeting_source = config_data.get("retargeting", app_data.get("retargeting"))
+    profile_source = config_data.get("profile", app_data.get("profile"))
+    detection_source = config_data.get(
+        "detection_source", app_data.get("detection_source", DEFAULT_DETECTION_SOURCE_CONFIG_PATH)
+    )
     solver_source = config_data.get("solver", app_data.get("solver"))
-    robot_config = load_robot_config(robot_source)
-    retargeting_config = load_retargeting_config(retargeting_source)
+    teleoperation_mode_source = config_data.get("teleoperation_mode", app_data.get("teleoperation_mode"))
+    profile_config = load_retargeting_profile_config(profile_source)
+    detection_source_config = load_detection_source_config(detection_source)
+    robot_config = load_robot_config(profile_config.robot)
+    retargeting_config = load_retargeting_config(profile_config.method)
     solver_config = load_solver_config(solver_source)
+    teleoperation_mode_config = load_teleoperation_mode_config(teleoperation_mode_source)
 
     data_file = str(config_data.get("data", app_data.get("data")))
     start = int(config_data.get("start", app_data.get("start", 0)))
@@ -255,18 +261,20 @@ def run_offline_retarget_from_config(config: Any, argv: list[str] | None = None)
 
     _, trajectory, metadata = run_offline_retargeting(
         data_file=data_file,
-        hand_type=robot_config.hand_type,
         start=start,
         end=end,
         stride=stride,
         robot_config=robot_config,
         retargeting_config=retargeting_config,
+        retargeting_profile_config=profile_config,
+        detection_source_config=detection_source_config,
+        teleoperation_mode_config=teleoperation_mode_config,
         solver_config=solver_config,
     )
     metadata.command = ["python", "-m", "retargeting.offline_retarget", *(argv or [])]
     output_dir = resolve_output_dir(config_data, robot_config.name, retargeting_config.type)
     output_dir = save_retargeting_trajectory(output_dir, trajectory, metadata)
-    run_post_retarget_actions(config_data, output_dir, robot_source, retargeting_source, solver_source)
+    run_post_retarget_actions(config_data, output_dir, profile_source, solver_source)
     return output_dir
 
 

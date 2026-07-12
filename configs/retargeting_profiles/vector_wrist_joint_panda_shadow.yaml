@@ -1,0 +1,134 @@
+# @package profile
+name: vector_wrist_joint_panda_shadow
+robot: configs/robots/panda_shadow.yaml
+method: configs/retargeting_methods/vector_wrist_joint.yaml
+target:
+  wrist_link_name: ee_link
+  link_pairs:
+    - [world, thtip]
+    - [ee_link, thtip]
+    - [ee_link, fftip]
+    - [ee_link, mftip]
+    - [ee_link, rftip]
+    - [ee_link, lftip]
+    - [thtip, fftip]
+    - [thtip, mftip]
+    - [thtip, rftip]
+    - [thtip, lftip]
+    - [thdistal, thtip]
+    - [ffdistal, fftip]
+    - [mfdistal, mftip]
+    - [rfdistal, rftip]
+    - [lfdistal, lftip]
+objective:
+  pinch_transition_threshold: 0.1
+  pinch_contact_threshold: 0.01
+  pinch_sigmoid_slope: 10.0
+  weights:
+    world_thumb: 10.0
+    wrist_fingertip: 1.0
+    thumb_primary: 10.0
+    fingertip_orientation: 10.0
+    wrist_rotation: 0.1
+    arm_link_vector: 10.0
+    arm_wrist_rotation: 1.0
+teleoperation:
+  arm_dof: 9
+  human_wrist_index: 0
+  joint_position_weights:
+    - 0
+    - 0
+    - 1.0
+    - 0
+    - 0.5
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0.5
+    - 0
+    - 0
+    - 0
+    - 0.5
+    - 0
+    - 0
+    - 0
+    - 0.5
+    - 0
+    - 0
+    - 0
+    - 0
+    - 0.5
+    - 0
+    - 0
+    - 0
+    - 0.1
+    - 0
+    - 0
+    - 0
+    - 0
+  joint_velocity_weights:
+    - 0.1
+    - 0.1
+    - 0.1
+    - 0.1
+    - 0.1
+    - 0.1
+    - 0.1
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+    - 0.01
+  max_joint_speed:
+    - 0.2
+    - 0.2
+    - 0.2
+    - 0.2
+    - 0.2
+    - 0.2
+    - 0.5
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+joint_limit_overrides: []

@@ -773,3 +773,23 @@ class VectorWristJointOptimizerV2(RetargetOptimizer):
             return total_cost.cpu().detach().item()
 
         return objective
+
+
+OPTIMIZER_CLASSES = {
+    "VectorWristJointOptimizer": VectorWristJointOptimizer,
+    "VectorWristJointOptimizerV2": VectorWristJointOptimizerV2,
+}
+
+
+def get_optimizer_class(class_name: str):
+    """
+    Args:
+        class_name: Optimizer class name from retargeting config.
+
+    Returns:
+        Optimizer class object used to construct the retargeting objective.
+    """
+    try:
+        return OPTIMIZER_CLASSES[class_name]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported optimizer class: {class_name}") from exc
