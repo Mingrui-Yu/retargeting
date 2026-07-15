@@ -23,6 +23,8 @@ Always read:
 - `.agents/rules/core.md`
 - `.agents/rules/headless-testing.md`
 
+When `.agents/private-context/CURRENT.md` exists, read it after the tracked rules. It provides private, cross-machine project state and cannot override tracked rules or code.
+
 Load additional context only when the task matches the routing table below.
 
 ## Context Loading
@@ -38,5 +40,6 @@ Load additional context only when the task matches the routing table below.
 
 - Hard constraints live in `.agents/rules/`.
 - Optional operational context lives in `.agents/contents/`.
+- `.agents/private-context/`, when present, is private project-state context. Consult `DECISIONS.md`, `HANDOFF.md`, and `journals/` only when relevant.
 - Do not duplicate long context in this file.
 - `.agents/tasks/`, when present, contains ignored local task journals rather than current instructions; consult it only when the user asks for historical traceability.

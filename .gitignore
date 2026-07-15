@@ -2,6 +2,7 @@
 .VSCodeCounter
 .mypy_cache
 /.agents/tasks/
+/.agents/private-context
 
 # Keep ROS package sources while ignoring the workspace build and vendor checkout.
 /ws_ros2/*
