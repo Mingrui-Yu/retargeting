@@ -1,7 +1,7 @@
 # Analyzing Key Objectives in Human-to-Robot Retargeting for Dexterous Manipulation
 
 <p align="center">
-  <a href="https://star-xcd.github.io/retargeting/">Project Website</a>
+  <a href="https://mingrui-yu.github.io/retargeting/">Project Website</a>
   &middot;
   <a href="https://arxiv.org/abs/2506.09384">arXiv</a>
 </p>

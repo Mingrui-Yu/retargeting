@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <!-- Meta tags for social media banners, these should be filled in appropriatly as they are your "business card" -->
+  <!-- Replace the content tag with appropriate information -->
+  <meta name="description" content="DESCRIPTION META TAG">
+  <meta property="og:title" content="SOCIAL MEDIA TITLE TAG"/>
+  <meta property="og:description" content="SOCIAL MEDIA DESCRIPTION TAG TAG"/>
+  <meta property="og:url" content="URL OF THE WEBSITE"/>
+  <!-- Path to banner image, should be in the path listed below. Optimal dimenssions are 1200X630-->
+  <!-- <meta property="og:image" content="static/image/your_banner_image.png" /> -->
+  <meta property="og:image:width" content="1200"/>
+  <meta property="og:image:height" content="630"/>
+
+
+  <meta name="twitter:title" content="TWITTER BANNER TITLE META TAG">
+  <meta name="twitter:description" content="TWITTER BANNER DESCRIPTION META TAG">
+  <!-- Path to banner image, should be in the path listed below. Optimal dimenssions are 1200X600-->
+  <!-- <meta name="twitter:image" content="static/images/your_twitter_banner_image.png"> -->
+  <meta name="twitter:card" content="summary_large_image">
+  <!-- Keywords for your paper to be indexed by-->
+  <meta name="keywords" content="KEYWORDS SHOULD BE PLACED HERE">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+  <title>Analyzing Key Objectives in Human-to-Robot Retargeting for Dexterous Manipulation</title>
+  <!-- <link rel="icon" type="image/x-icon" href="static/images/favicon.ico"> -->
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro"
+  rel="stylesheet">
+
+  <link rel="stylesheet" href="static/css/bulma.min.css">
+  <link rel="stylesheet" href="static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="static/css/bulma-slider.min.css">
+  <link rel="stylesheet" href="static/css/fontawesome.all.min.css">
+  <link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="static/css/index.css">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="https://documentcloud.adobe.com/view-sdk/main.js"></script>
+  <script defer src="static/js/fontawesome.all.min.js"></script>
+  <script src="static/js/bulma-carousel.min.js"></script>
+  <script src="static/js/bulma-slider.min.js"></script>
+  <script src="static/js/index.js"></script>
+  <script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+    svg: { fontCache: 'global' }
+  };
+ </script>
+ <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+</head>
+<body>
+
+
+  <section class="hero">
+    <div class="hero-body">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered">
+          <div class="column has-text-centered">
+            <h1 class="title is-1 publication-title">Analyzing Key Objectives in Human-to-Robot Retargeting for Dexterous Manipulation</h1>
+            <div class="is-size-5 publication-authors">
+              <!-- Paper authors -->
+              <span class="author-block">
+                <a href="https://star-xcd.github.io" target="_blank">Chendong Xin</a><sup>*</sup>,</span>
+                <span class="author-block">
+                  <a href="https://mingrui-yu.github.io/" target="_blank">Mingrui Yu</a><sup>*</sup>,</span>
+                  <span class="author-block">
+                    Yongpeng Jiang,</span>
+                    <span class="author-block">
+                      Zhefeng Zhang,</span>
+                      <span class="author-block">
+                        and Xiang Li
+                  </span>
+                  </div>
+
+                  <div class="is-size-5 publication-authors">
+                    <span class="author-block"> Tsinghua University <br><strong>IEEE Robotics and Automation Practice</strong>, 2025 <br><strong>ICRA 2025 Workshop "Handy Moves: Dexterity in Multi-Fingered Hands"</strong> </span>
+                    <span class="eql-cntrb"><small><br><sup>*</sup>Indicates Equal Contribution</small></span>
+                  </div>
+
+                  <div class="column has-text-centered">
+                    <div class="publication-links">
+                         <!-- Arxiv PDF link -->
+                      <span class="link-block">
+                        <a href="static/pdfs/Analyzing Key Objectives in Human-to-Robot Retargeting for Dexterous Manipulation.pdf" target="_blank"
+                        class="external-link button is-normal is-rounded is-dark">
+                        <span class="icon">
+                          <i class="fas fa-file-pdf"></i>
+                        </span>
+                        <span>Paper</span>
+                      </a>
+                    </span>
+
+                    <!-- Supplementary PDF link -->
+                    <span class="link-block">
+                      <a href="https://openreview.net/forum?id=ojCJehWjy7" target="_blank"
+                      class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon">
+                        <i class="fas fa-users"></i>
+                      </span>
+                      <span>Workshop</span>
+                    </a>
+                  </span>
+
+                  <!-- Github link -->
+                  <span class="link-block">
+                    <a href="https://github.com/Mingrui-Yu/retargeting" target="_blank"
+                    class="external-link button is-normal is-rounded is-dark">
+                    <span class="icon">
+                      <i class="fab fa-github"></i>
+                    </span>
+                    <span>Code</span>
+                  </a>
+                </span>
+
+                <!-- ArXiv abstract Link -->
+                <span class="link-block">
+                  <a href="https://arxiv.org/abs/2506.09384" target="_blank"
+                  class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                    <i class="ai ai-arxiv"></i>
+                  </span>
+                  <span>arXiv</span>
+                </a>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- Paper abstract -->
+<section class="section hero is-light">
+  <div class="container is-max-desktop">
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Abstract</h2>
+        <div class="content has-text-justified">
+          <p>
+            Kinematic retargeting from human hands to robot hands is essential for transferring dexterity from humans to robots in manipulation teleoperation and imitation learning. However, due to mechanical differences between human and robot hands, completely reproducing human motions on robot hands is impossible. Existing works on retargeting incorporate various optimization objectives, focusing on different aspects of hand configuration. However, the lack of experimental comparative studies leaves the significance and effectiveness of these objectives unclear. This work aims to analyze these retargeting objectives for dexterous manipulation through extensive real-world comparative experiments. Specifically, we propose a comprehensive retargeting objective formulation that integrates intuitively crucial factors appearing in recent approaches. The significance of each factor is evaluated through experimental ablation studies on the full objective in kinematic posture retargeting and real-world teleoperated manipulation tasks. Experimental results and conclusions provide valuable insights for designing more accurate and effective retargeting algorithms for real-world dexterous manipulation.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- End paper abstract -->
+
+
+<!-- Teaser video-->
+<section class="hero teaser">
+  <div class="container is-max-desktop">
+    <div class="hero-body">
+      <!-- <h2 class="title is-3 has-text-centered">Video</h2> -->
+      <video poster="" id="tree" autoplay controls muted loop height="100%">
+        <!-- Your video here -->
+        <source src="https://star-xcd.github.io/retargeting/static/videos/final.mp4"
+        type="video/mp4">
+      </video>
+      <h2 class="subtitle has-text-centered">
+        This video is an overview of our method and experimental results, including kinematic posture retargeting, real-world manipulation tasks, 
+        and trials on more complex manipulation tasks.
+      </h2>
+    </div>
+  </div>
+</section>
+<!-- End teaser video -->
+
+
+<!-- Method -->
+<section class="section" id="method">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 has-text-centered">Method</h2>
+
+    <!-- Teaser figure (method overview) -->
+    <div class="has-text-centered">
+      <figure class="image">
+        <img src="static/images/teaser_method.png" alt="Method teaser" style="width: 50%; display: block; margin: 0 auto;">
+      </figure>
+      <br>
+      <p class="is-size-6 has-text-grey">
+         Crucial objectives in human-to-robot retargeting for dexterous manipulation. We explore the appropriate formulation of these objectives and experimentally analyze their significance for different manipulation tasks.
+      </p>
+      <br>
+    </div>
+
+    <!-- Objective Terms -->
+    <div class="box" id="objective-terms">
+      <h3 class="title is-4">Objective Terms</h3>
+
+      <p class="content">
+        We intuitively list the factors that are potentially crucial to human-to-robot retargeting
+        for dexterous manipulation, formulate their corresponding mathematical representations,
+        and construct a complete retargeting objective. (See full formulations and their explanations 
+        in Section II of the paper.)
+      </p>
+
+      <div class="columns">
+        <!-- Left: semantic description -->
+        <div class="column is-6">
+          <div class="content">
+            <ul class="obj-list">
+              <li class="obj-item" data-key="hand_pose">
+                <strong>Global hand pose</strong>:
+                using <strong>thumb-tip position term</strong> (instead of typical wrist position term) and
+                wrist orientation term (with small weight).
+              </li>
+
+              <li class="obj-item" data-key="fingertip_pos">
+                <strong>Overall hand shape</strong>:
+                using <strong>fingertip positions relative to the wrist</strong> to preserve the posture of the human hand.
+              </li>
+
+              <li class="obj-item" data-key="pinch">
+                <strong>Relative fingertip positions</strong>:
+                using spatial relationship between <strong>thumb-tip and primary fingertips</strong> to enable precise
+                coordination of fingertips for manipulation tasks like pinching.
+              </li>
+
+              <li class="obj-item" data-key="fingertip_rot">
+                <strong>Fingertip orientations</strong>:
+                using vectors <strong>from DIP joints to fingertips</strong> to ensure correct contact normals
+                for fine manipulation.
+              </li>
+
+              <li class="obj-item" data-key="total">
+                <strong>Complete retargeting objective</strong>:
+                combining all the above terms with joint regularization (prevent undesired joint configurations) 
+                and velocity regularization (encourage smooth motion).
+            </ul>
+          </div>
+        </div>
+
+        <!-- Right: mathematical formulation -->
+        <div class="column is-6">
+          <div class="content obj-eqs">
+
+            <div class="eq-item" data-key="hand_pose">
+              $$\begin{aligned}
+              \mathcal{L}_{\text{hand pose}}
+              &= \left\lVert \mathbf{p}^{\,h}_{\text{thumb}} - \mathbf{p}^{\,r}_{\text{thumb}} \right\rVert_2^2 \\
+              &\quad + \beta_{\text{rot}}\,
+              \mathrm{angle}\!\left(\mathbf{q}^{\,h}_{\text{wrist}},\, \mathbf{q}^{\,r}_{\text{wrist}}\right)
+              \end{aligned}\tag{1}$$
+            </div>
+
+            <div class="eq-item" data-key="fingertip_pos">
+              $$\mathcal{L}_{\text{fingertip pos}}
+              = \sum_{i=1}^{N} \left\lVert \mathbf{v}^{\,h}_{i} - \mathbf{v}^{\,r}_{i} \right\rVert_2^2\tag{2}$$
+            </div>
+
+            <div class="eq-item" data-key="pinch">
+              $$\mathcal{L}_{\text{pinch}}
+              = \sum_{i=1}^{N-1} s(d_i)\,
+              \left\lVert \boldsymbol{\gamma}^{\,r}_{i} - l(d_i)\,\hat{\boldsymbol{\gamma}}^{\,h}_{i} \right\rVert_2^2\tag{3}$$
+            </div>
+
+            <div class="eq-item" data-key="fingertip_rot">
+              $$\mathcal{L}_{\text{fingertip rot}}
+              = \sum_{i=1}^{N} \left\lVert \mathbf{r}^{\,h}_{i} - \mathbf{r}^{\,r}_{i} \right\rVert_2^2\tag{5}$$
+            </div>
+
+            <div class="eq-item" data-key="total">
+              $$\begin{aligned}
+              \mathcal{L}_{\text{total}}
+              &= \lambda_1 \mathcal{L}_{\text{thumb pos}}
+              + \lambda_2 \mathcal{L}_{\text{wrist rot}} \\
+              &\quad + \lambda_3 \mathcal{L}_{\text{fingertip pos}} 
+              + \lambda_4 \mathcal{L}_{\text{fingertip rot}} \\
+              &\quad + \lambda_5 \mathcal{L}_{\text{pinch}}
+              + \mathcal{L}_{\text{joint}}
+              + \mathcal{L}_{\text{vel}}
+              \end{aligned}\tag{6}$$
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- End Objective Terms -->
+
+</section>
+<!-- End Method -->
+
+
+<!-- Experiments & Results  -->
+<section class="section">
+  <div class="container is-max-desktop">
+
+    <h2 class="title is-3 has-text-centered">Experiments & Results</h2>
+    <div class="content has-text-centered">
+      <p class="is-size-5">
+        We analyze the significance of different retargeting objectives via
+        <strong>kinematic posture retargeting</strong> and <strong>real-world teleoperation manipulation</strong>.
+      </p>
+    </div>
+
+    <!-- Ablation setup -->
+    <div class="box">
+      <h3 class="title is-4">Ablation Setup</h3>
+      <div class="content">
+        <p>
+          We implement ablations by removing or changing certain objective terms in the above complete objective to analyze their significance.
+        </p>
+      </div>
+      <div class="has-text-centered">
+        <figure class="image">
+          <img src="static/images/ablation_table.png" alt="Ablation table">
+        </figure>
+        <!-- <p class="is-size-7 has-text-grey">Table: ablation categories and definitions (A1–A8).</p> -->
+      </div>
+    </div>
+
+    <!-- Kinematic posture retargeting -->
+    <div class="box">
+      <h3 class="title is-4">Kinematic Posture Retargeting</h3>
+
+      <!-- (1) Setup -->
+      <div class="content">
+        <p>
+          <strong>Setup.</strong>
+          We evaluate the full retargeting objective and eight ablations across two pieces of offline data: (1) Traj 1: a trajectory of three pinch motions 
+          involving the thumb and the index, middle, and ring fingers, respectively; (2) Traj 2: a trajectory involving finger crossing motions. The evaluation is 
+          performed on 2 types of robot hands: the LEAP hand and the Shadow hand. We use four quantitative metrics for kinematic postures: 1) average fingertip position error in the global frame, 2) average fingertip position 
+          error relative to the wrist, 3) average fingertip position error relative to the thumb, and 4) average fingertip orientation error.
+        </p>
+      </div>
+
+      <hr>
+
+        <!-- (2) Four result figures (stacked vertically) -->
+        <div class="content">
+
+          <div class="mb-5">
+            <figure class="image">
+              <img src="static/images/leap_pinch.png" alt="Results of kinematic posture retargeting on Traj 1 (LEAP hand)">
+            </figure>
+            <p class="is-size-6 has-text-grey">
+              <strong>Results of kinematic posture retargeting on Traj 1 (LEAP hand).</strong>
+              Each bar shows the error of one ablation implementation and the colors represent the ablation category defined in Table I.
+              For the metrics of fingertip global position and fingertip relative position to the thumb, only the errors of the two fingers involved in the pinching motion are considered.
+            </p>
+          </div>
+
+          <hr>
+
+          <div class="mb-5">
+            <figure class="image">
+              <img src="static/images/leap_complex.png" alt="Results of kinematic posture retargeting on Traj 2 (LEAP hand)">
+            </figure>
+            <p class="is-size-6 has-text-grey">
+              <strong>Results of kinematic posture retargeting on Traj 2 (LEAP hand).</strong>
+              <!-- TODO: add 1-line description -->
+            </p>
+          </div>
+
+          <hr>
+
+          <div class="mb-5">
+            <figure class="image">
+              <img src="static/images/shadow_pinch.png" alt="Results of kinematic posture retargeting on Traj 1 (Shadow hand)">
+            </figure>
+            <p class="is-size-6 has-text-grey">
+              <strong>Results of kinematic posture retargeting on Traj 1 (Shadow hand).</strong>
+              <!-- TODO: add 1-line description -->
+            </p>
+          </div>
+
+          <hr>
+
+          <div class="mb-5">
+            <figure class="image">
+              <img src="static/images/shadow_complex.png" alt="Results of kinematic posture retargeting on Traj 2 (Shadow hand)">
+            </figure>
+            <p class="is-size-6 has-text-grey">
+              <strong>Results of kinematic posture retargeting on Traj 2 (Shadow hand).</strong>
+              <!-- TODO: add 1-line description -->
+            </p>
+          </div>
+
+        </div>
+
+        <hr>
+
+        <!-- (3) Video comparisons -->
+      <div class="content">
+        <p class="mb-4">
+          <strong>Real-world kinematic postures retargeting results.</strong>
+          We choose 3 ablations (A1, A3, and A7). From left to right, we show the human-hand demonstration,
+          the posture retargeting result using the full objective, and the result under the corresponding ablation.
+        </p>
+      </div>
+
+      <!-- Column headers -->
+      <div class="columns has-text-centered is-variable is-2 mb-2">
+        <div class="column is-4">
+          <p class="has-text-weight-semibold">Human demo</p>
+        </div>
+        <div class="column is-4">
+          <p class="has-text-weight-semibold">Full objective</p>
+        </div>
+        <div class="column is-4">
+          <p class="has-text-weight-semibold">Ablation</p>
+        </div>
+      </div>
+
+      <!-- ================= Row 1 ================= -->
+      <div class="columns is-variable is-3">
+        <div class="column is-4">
+          <div class="card">
+            <div class="card-content">
+              <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+                <source src="https://star-xcd.github.io/retargeting/static/videos/pos_human_s.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+
+        <div class="column is-4">
+          <div class="card">
+            <div class="card-content">
+              <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+                <source src="https://star-xcd.github.io/retargeting/static/videos/pos_full_s.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+
+        <div class="column is-4">
+          <div class="card">
+            <div class="card-content">
+              <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+                <source src="https://star-xcd.github.io/retargeting/static/videos/pos_a1_s.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 1 caption (single line for the whole row) -->
+      <p class="is-size-6 has-text-grey mt-2 mb-5">
+        <strong>Ablation 1 (i.e., w/o pinch term):</strong> less precise pinch (cannot close the gap between thumb and primary fingertips).
+      </p>
+
+      <hr>
+
+      <!-- ================= Row 2 ================= -->
+      <div class="columns is-variable is-3">
+        <div class="column is-4">
+          <div class="card">
+            <div class="card-content">
+              <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+                <source src="https://star-xcd.github.io/retargeting/static/videos/pos_human_s2.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+
+        <div class="column is-4">
+          <div class="card">
+            <div class="card-content">
+              <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+                <source src="https://star-xcd.github.io/retargeting/static/videos/pos_full_s2.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+
+        <div class="column is-4">
+          <div class="card">
+            <div class="card-content">
+              <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+                <source src="https://star-xcd.github.io/retargeting/static/videos/pos_a3_s2.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 2 caption -->
+      <p class="is-size-6 has-text-grey mt-2 mb-5">
+        <strong>Ablation 3 (i.e., w/o fingertip orientation term):</strong> mismatched finger orientation.
+      </p>
+
+      <hr>
+
+      <!-- ================= Row 3 ================= -->
+      <div class="columns is-variable is-3">
+        <div class="column is-4">
+          <div class="card">
+            <div class="card-content">
+              <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+                <source src="https://star-xcd.github.io/retargeting/static/videos/pos_human_s3.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+
+        <div class="column is-4">
+          <div class="card">
+            <div class="card-content">
+              <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+                <source src="https://star-xcd.github.io/retargeting/static/videos/pos_full_s3.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+
+        <div class="column is-4">
+          <div class="card">
+            <div class="card-content">
+              <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+                <source src="https://star-xcd.github.io/retargeting/static/videos/pos_a7_s3.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 3 caption -->
+      <p class="is-size-6 has-text-grey mt-2">
+        <strong>Ablation 7 (i.e., w/o joint position regularization):</strong> the hand displays undesired joint configurations.
+      </p>
+
+      <!-- More videos button -->
+      <div class="has-text-centered mt-5">
+        <a href="more_videos_pos/" class="button is-link is-rounded is-medium">
+          All Ablation Videos
+        </a>
+      </div>
+
+    </div>
+    <!-- End Kinematic posture retargeting -->
+
+    <!-- Real-world manipulation -->
+    <div class="box">
+      <h3 class="title is-4">Real-World Manipulation Tasks</h3>
+
+      <!-- ========================= Task 1 ========================= -->
+      <div class="content">
+          <strong>Task 1.</strong> Pick up a box, rotate it, and place it down, representing common pick-and-place tasks in dexterous teleoperation.
+      </div>
+
+      <!-- Column headers -->
+      <div class="columns is-variable is-3 mb-2">
+        <div class="column is-4 has-text-centered"><strong>Full objective</strong></div>
+        <div class="column is-4 has-text-centered"><strong>Ablation 1</strong></div>
+        <div class="column is-4 has-text-centered"><strong>Ablation 3</strong></div>
+      </div>
+
+      <!-- Row 1: Robot hand -->
+      <div class="columns is-variable is-3">
+        <div class="column is-4">
+          <div class="card">
+            <div class="card-content">
+              <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+                <source src="https://star-xcd.github.io/retargeting/static/videos/real/task1/full_r.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+
+        <div class="column is-4">
+          <div class="card">
+            <div class="card-content">
+              <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+                <source src="https://star-xcd.github.io/retargeting/static/videos/real/task1/a1_r.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+
+        <div class="column is-4">
+          <div class="card">
+            <div class="card-content">
+              <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+                <source src="https://star-xcd.github.io/retargeting/static/videos/real/task1/a3_r.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 2: Human hand -->
+      <div class="columns is-variable is-3">
+        <div class="column is-4">
+          <div class="card">
+            <div class="card-content">
+              <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+                <source src="https://star-xcd.github.io/retargeting/static/videos/real/task1/full_h.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+
+        <div class="column is-4">
+          <div class="card">
+            <div class="card-content">
+              <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+                <source src="https://star-xcd.github.io/retargeting/static/videos/real/task1/a1_h.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+
+        <div class="column is-4">
+          <div class="card">
+            <div class="card-content">
+              <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+                <source src="https://star-xcd.github.io/retargeting/static/videos/real/task1/a3_h.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="is-size-6 has-text-grey mt-2 mb-5">
+        All ablations show similar performance in such simple pick-and-place tasks which do not require precise fingertip coordination or accurate contacts.
+      </p>
+
+      <hr>
+
+      <!-- ========================= Task 2 ========================= -->
+      <div class="content">
+        <!-- <p class="is-size-5 mb-3"> -->
+          <strong>Task 2.</strong> Drag a mug through its handle using the bent thumb, where fingertip orientation plays a decisive role.
+        <!-- </p> -->
+      </div>
+
+      <div class="columns is-variable is-3 mb-2">
+        <div class="column is-4 has-text-centered"><strong>Full objective</strong></div>
+        <div class="column is-4 has-text-centered"><strong>Ablation 3</strong></div>
+        <div class="column is-4 has-text-centered"><strong>Ablation 6</strong></div>
+      </div>
+
+      <div class="columns is-variable is-3">
+        <div class="column is-4">
+          <div class="card"><div class="card-content">
+            <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+              <source src="https://star-xcd.github.io/retargeting/static/videos/real/task2/full_r.mp4" type="video/mp4">
+            </video>
+          </div></div>
+        </div>
+        <div class="column is-4">
+          <div class="card"><div class="card-content">
+            <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+              <source src="https://star-xcd.github.io/retargeting/static/videos/real/task2/a3_r.mp4" type="video/mp4">
+            </video>
+          </div></div>
+        </div>
+        <div class="column is-4">
+          <div class="card"><div class="card-content">
+            <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+              <source src="https://star-xcd.github.io/retargeting/static/videos/real/task2/a6_r.mp4" type="video/mp4">
+            </video>
+          </div></div>
+        </div>
+      </div>
+
+      <div class="columns is-variable is-3">
+        <div class="column is-4">
+          <div class="card"><div class="card-content">
+            <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+              <source src="https://star-xcd.github.io/retargeting/static/videos/real/task2/full_h.mp4" type="video/mp4">
+            </video>
+          </div></div>
+        </div>
+        <div class="column is-4">
+          <div class="card"><div class="card-content">
+            <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+              <source src="https://star-xcd.github.io/retargeting/static/videos/real/task2/a3_h.mp4" type="video/mp4">
+            </video>
+          </div></div>
+        </div>
+        <div class="column is-4">
+          <div class="card"><div class="card-content">
+            <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+              <source src="https://star-xcd.github.io/retargeting/static/videos/real/task2/a6_h.mp4" type="video/mp4">
+            </video>
+          </div></div>
+        </div>
+      </div>
+
+      <p class="is-size-6 has-text-grey mt-2 mb-5">
+        In <strong>A3</strong> and <strong>A6</strong>, no consideration of fingertip orientations results in poor performance as the robot hand fails 
+        to replicate the finger bending motion of the human pilots to hook the mug handle.
+      </p>
+
+      <hr>
+
+      <!-- ========================= Task 3 ========================= -->
+      <div class="content">
+          <strong>Task 3.</strong> Pick up five different upright-standing screws and place them vertically, where precise pinches are important. 
+          <!-- (Videos for this task are speeded up by 3 times.) -->
+      </div>
+
+      <div class="columns is-variable is-3 mb-2">
+        <div class="column is-4 has-text-centered"><strong>Full objective</strong></div>
+        <div class="column is-4 has-text-centered"><strong>Ablation 2</strong></div>
+        <div class="column is-4 has-text-centered"><strong>Ablation 3</strong></div>
+      </div>
+
+      <div class="columns is-variable is-3">
+        <div class="column is-4">
+          <div class="card"><div class="card-content">
+            <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+              <source src="https://star-xcd.github.io/retargeting/static/videos/real/task3/full_r.mp4" type="video/mp4">
+            </video>
+          </div></div>
+        </div>
+        <div class="column is-4">
+          <div class="card"><div class="card-content">
+            <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+              <source src="https://star-xcd.github.io/retargeting/static/videos/real/task3/a2_r.mp4" type="video/mp4">
+            </video>
+          </div></div>
+        </div>
+        <div class="column is-4">
+          <div class="card"><div class="card-content">
+            <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+              <source src="https://star-xcd.github.io/retargeting/static/videos/real/task3/a3_r.mp4" type="video/mp4">
+            </video>
+          </div></div>
+        </div>
+      </div>
+
+      <div class="columns is-variable is-3">
+        <div class="column is-4">
+          <div class="card"><div class="card-content">
+            <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+              <source src="https://star-xcd.github.io/retargeting/static/videos/real/task3/full_h.mp4" type="video/mp4">
+            </video>
+          </div></div>
+        </div>
+        <div class="column is-4">
+          <div class="card"><div class="card-content">
+            <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+              <source src="https://star-xcd.github.io/retargeting/static/videos/real/task3/a2_h.mp4" type="video/mp4">
+            </video>
+          </div></div>
+        </div>
+        <div class="column is-4">
+          <div class="card"><div class="card-content">
+            <video autoplay loop muted playsinline controls width="100%" preload="metadata">
+              <source src="https://star-xcd.github.io/retargeting/static/videos/real/task3/a3_h.mp4" type="video/mp4">
+            </video>
+          </div></div>
+        </div>
+      </div>
+
+      <p class="is-size-6 has-text-grey mt-2 mb-5">
+        Using actual pinch distances without rescaling in <strong>A2</strong> could lead to low success rate in real-world manipulation tasks, 
+        primarily due to that using actual pinch distance is vulnerable to human finger tracking inaccuracy.  
+        In <strong>A3</strong>, the missing of fingertip orientation information also has negative impacts on precise manipulation tasks, 
+        as inaccuracy in orientation leads to undesired contact normals with the object.
+      </p>
+
+    <!-- More videos button -->
+    <!-- <div class="has-text-centered mt-5">
+      <a href="more_videos_task/" class="button is-link is-rounded is-medium">
+      All Ablation Videos
+      </a>
+    </div> -->
+
+    <hr>
+
+    <!-- ================= Overall Quantitative Results ================= -->
+    <div class="content has-text-centered">
+      <h4 class="title is-5">Results of the real-world manipulation tasks</h4>
+
+      <!-- <p class="is-size-6 mb-4">
+        We report task success rates across all real-world teleoperated manipulation tasks
+        under the full objective and different ablations.
+      </p> -->
+
+      <figure class="image is-inline-block">
+        <img
+          src="static/images/task.png"
+          alt="Overall real-world task success rates across tasks and ablations"
+          style="max-width: 70%; height: auto;"
+        >
+      </figure>
+
+      <p class="is-size-6 has-text-grey mt-2">
+        Task 1 and 2 are assessed by task time, while Task 3 is evaluated by success rate. 
+        Each pair of bars shows the error of one ablation implementation and the colors represent 
+        the ablation category defined in Table I. The two pilots are distinguished by hatched bars.
+      </p>
+    </div>
+
+    </div>
+    <!-- End Real-world manipulation -->
+
+
+    <!-- Key takeaways -->
+    <div class="box">
+      <h3 class="title is-4">Key Takeaways</h3>
+      <div class="content">
+        <ul>
+          <li><strong>Fingertip pinch</strong>: removing this term increases positional error and decreases pinch success; crucial for tasks that require precise fingertip coordination.</li>
+          <li><strong>Fingertip orientation</strong>: without it, the robot hand fails to bend fingers naturally; crucial for tasks sensitive to finger orientation, not just position.</li>
+          <li><strong>Global hand pose</strong>: using thumb-tip position term (instead of wrist position) allows wrist’s flexible adjustment to improve fingertip accuracy.</li>
+          <li><strong>Joint regularization</strong>: prevents undesired joint configurations.</li>
+          <li><strong>All terms using our proposed formulation demonstrate no conflicts and perform well across all tasks.</strong></li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</section>
+<!-- End Experiments & Results -->
+
+
+<!--BibTex citation -->
+  <section class="section" id="BibTeX">
+    <div class="container is-max-desktop content">
+      <h2 class="title">BibTeX</h2>
+      <pre><code>@article{xin2026analyzing,
+        title={Analyzing Key Objectives in Human-to-Robot Retargeting for Dexterous Manipulation},
+        author={Xin, Chendong and Yu, Mingrui and Jiang, Yongpeng and Zhang, Zhefeng and Li, Xiang},
+        journal={IEEE Robotics and Automation Practice},
+        year={2026},
+        publisher={IEEE}
+      }</code></pre>
+    </div>
+</section>
+<!--End BibTex citation -->
+
+
+  <footer class="footer">
+  <div class="container">
+    <div class="columns is-centered">
+      <div class="column is-8">
+        <div class="content">
+
+          <p>
+            This page was built using the <a href="https://github.com/eliahuhorwitz/Academic-project-page-template" target="_blank">Academic Project Page Template</a> which was adopted from the <a href="https://nerfies.github.io" target="_blank">Nerfies</a> project page.
+            <br> This website is licensed under a <a rel="license"  href="http://creativecommons.org/licenses/by-sa/4.0/" target="_blank">Creative
+            Commons Attribution-ShareAlike 4.0 International License</a>.
+          </p>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- Statcounter tracking code -->
+  
+<!-- You can add a tracker to track page visits by creating an account at statcounter.com -->
+
+    <!-- End of Statcounter Code -->
+
+  </body>
+  </html>
