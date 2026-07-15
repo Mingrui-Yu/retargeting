@@ -4,6 +4,9 @@ defaults:
   - /detection_sources: avp
   - /teleoperation_modes: simulation
   - /solvers: nlopt_slsqp
+  # Reuse the standalone apps' defaults for post-processing actions.
+  - /app/benchmark@post.benchmark
+  - /app/replay@post.visualize
   - _self_
 
 app:
@@ -20,16 +23,8 @@ run_name: null
 post:
   benchmark:
     enabled: false
+    # The post action must follow this offline run when output_root is overridden.
     output_root: ${output_root}
-    output_dir: null
-    plot: true
     plot_root: ${output_root}
-    plot_dir: null
   visualize:
     enabled: false
-    viewer:
-      fps: 20.0
-      port: 9218
-      no_robot_mesh: false
-      trail_length: 120
-      human_keypoint_size: 0.018

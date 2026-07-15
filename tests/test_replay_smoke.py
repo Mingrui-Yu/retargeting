@@ -160,6 +160,39 @@ def test_robot_adaptor_forward_backward_qpos_round_trip():
     assert adaptor.backward_jacobian(jacobian).shape == (2, 6, adaptor.doa)
 
 
+def test_panda_leap_profile_joint_limit_override_reaches_optimizer_and_solver():
+    """Verify configured Leap lower bounds are applied to optimizer and solver state.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    np = _np()
+    pytest.importorskip("pinocchio")
+    pytest.importorskip("nlopt")
+    pytest.importorskip("torch")
+
+    from retargeting.config import load_retargeting_config, load_retargeting_profile_config, load_robot_config
+    from retargeting.core.kinematics.adaptor import RobotAdaptor
+    from retargeting.core.kinematics.pinocchio_model import RobotPinocchio
+    from retargeting.core.retargeter import Retargeter
+
+    robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
+    profile_config = load_retargeting_profile_config("configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml")
+    method_config = load_retargeting_config(profile_config.method)
+    robot_model = RobotPinocchio(robot_config.robot_file_path, robot_config.model.type)
+    adaptor = RobotAdaptor(robot_model, actuated_joints_name=list(robot_config.actuated_joints))
+    retargeter = Retargeter(adaptor, robot_config, profile_config, method_config)
+
+    expected_indices = np.asarray([9, 10, 13, 14, 17, 18])
+    assert profile_config.joint_limit_overrides[0].indices == tuple(expected_indices)
+    assert profile_config.joint_limit_overrides[0].lower == 0.0
+    np.testing.assert_allclose(retargeter.optimizer.joint_limits[expected_indices, 0], 0.0)
+    np.testing.assert_allclose(retargeter.optimizer.opt._state.lower_bounds[expected_indices], -0.001)
+
+
 def test_vector_wrist_joint_optimizer_single_frame_smoke():
     # Minimal optimizer smoke test: construct the current VectorWristJoint
     # objective and run one retarget() call. This checks that the optimization

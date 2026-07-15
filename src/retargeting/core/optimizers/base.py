@@ -56,6 +56,7 @@ class RetargetOptimizer:
         self.opt = create_callback_solver(solver, self.opt_dim)
         self.opt.configure({} if solver_params is None else solver_params)
         self.joint_limits = robot_adaptor.backward_qpos(self.robot_model.joint_limits)
+        self.apply_joint_limit_overrides([] if joint_limit_overrides is None else joint_limit_overrides)
         self.set_joint_limit(self.joint_limits)
 
     def apply_joint_limit_overrides(self, joint_limit_overrides: List[Dict]) -> None:
