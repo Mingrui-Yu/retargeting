@@ -51,11 +51,19 @@ assets/
 │   └── shadow_hand/
 ├── robots/
 │   ├── panda_leap_paxini/
+│   │   ├── manifest.yaml
+│   │   ├── meshes/
+│   │   ├── mjcf/
+│   │   └── urdf/
 │   └── panda_shadow/
 └── scenes/
 ```
 
-Robot configs should point to stable paths under `assets/robots/`. Shared component meshes live under `assets/meshes/`; robot URDF asset folders use local symlinks such as `panda`, `leap_hand`, and `shadow_hand` so URDF mesh paths stay relative and portable.
+Robot configs should point to stable paths under `assets/robots/`. `panda_leap_paxini` is a self-contained portable
+bundle: its manifest exposes both URDF and MJCF entry points, both descriptions resolve only bundle-local meshes, and
+the bundle contains no symlinks. `panda_shadow` continues to reuse component meshes under `assets/meshes/` through
+robot-local `panda` and `shadow_hand` symlinks. The shared component directories remain available for that layout and
+compatibility with older assets.
 
 For ROS robot description work, Xacro/URDF files are still available under `ws_ros2/src/my_robot_description/`.
 
@@ -212,3 +220,22 @@ python -c "from retargeting.main import compose_hydra_base_config; cfg = compose
 ```
 
 Default tests should not start ROS, RViz, cameras, Vision Pro live streaming, real robots, Open3D GUI, or MuJoCo viewer.
+
+## Online MuJoCo Simulation
+
+`app=mujoco_simulation` is a headless live execution path, not a saved-trajectory replay. The app takes the latest AVP
+frame, retargets it once, applies the configured joint-speed and actuator-range policy, sends the resulting qpos to
+the MJCF position actuators, and advances one 20 Hz command period before accepting the next frame. With the default
+`0.002 s` physics timestep, one command period is exactly 25 MuJoCo steps.
+
+Robot-specific MJCF paths live under `simulation_model` in the robot config. Runtime timing and range behavior live
+in `configs/simulators/mujoco.yaml`; viewer dependencies are intentionally absent from the backend. For headless
+diagnostics, override `simulator.realtime=false` so the same fixed simulated time is advanced without wall-clock
+sleeping.
+
+For raw offline human input, select `app=mujoco_offline_simulation`. This app loads only the input NPZ's `stream_*`
+arrays and explicitly ignores any existing `retarget_qpos`. It initializes wrist alignment from the first valid raw
+human frame, retargets that same frame, and then advances one command period for every selected source frame. Frames
+without a valid hand hold the preceding robot command while still advancing simulation time, preserving the source
+trajectory timeline. Offline simulation defaults to `realtime=false`; `start` and `end` select a contiguous interval.
+The configured `source_hz` must match the 20 Hz command rate until timestamp-based resampling is added.

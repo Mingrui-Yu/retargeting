@@ -11,10 +11,24 @@ The focused offline regression file is `tests/test_replay_smoke.py`. It currentl
 - Panda+Leap profile lower-bound overrides reaching both the optimizer and its solver;
 - one `VectorWristJointOptimizer.retarget()` call for each supported SLSQP backend: NLopt and SciPy.
 
+The full headless suite also validates the self-contained Panda+Leap portable bundle manifest and relative resource
+paths. When the optional `mujoco` dependency is installed, it compiles the bundled MJCF without launching a viewer;
+otherwise that test reports an explicit skip. The online MuJoCo tests additionally validate joint-name state mapping,
+position-actuator control ranges, 20 Hz command stepping, command-rate limiting, missing-detection hold behavior, and
+the absence of viewer or saved-trajectory dependencies. The offline-human tests verify that only raw `stream_*`
+arrays are loaded, existing `retarget_qpos` data is ignored, every source frame consumes one 20 Hz simulation tick,
+and a real two-frame raw AVP sequence retargets directly into headless MuJoCo.
+
 Focused command:
 
 ```bash
 /home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests/test_replay_smoke.py -q
+```
+
+Focused online MuJoCo command:
+
+```bash
+/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests/test_mujoco_backend.py tests/test_mujoco_online_runtime.py tests/test_mujoco_offline_simulation.py -q
 ```
 
 Full headless regression command:
@@ -23,4 +37,6 @@ Full headless regression command:
 /home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests -q
 ```
 
-The baseline verified on 2026-07-13 is 8 focused tests and 59 tests in the full suite. Update this document when the intended test scope changes; optional dependencies should produce explicit skips rather than a behavior change.
+The baseline verified on 2026-07-17 with the `mujoco` extra installed is 8 focused replay tests, 11 focused MuJoCo
+tests, and 75 tests in the full suite. Update this document when the intended test scope changes; optional
+dependencies should produce explicit skips rather than a behavior change.

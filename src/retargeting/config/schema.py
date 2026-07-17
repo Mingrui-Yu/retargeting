@@ -433,6 +433,7 @@ class DetectionSourceConfig:
 class RobotConfig:
     name: str
     model: RobotModelConfig
+    simulation_model: RobotModelConfig | None
     actuated_joints: tuple[str, ...]
     initial_qpos: tuple[float, ...]
     visual_frame_names: tuple[str, ...]
@@ -445,6 +446,9 @@ class RobotConfig:
         return cls(
             name=str(data["name"]),
             model=RobotModelConfig.from_dict(data["model"]),
+            simulation_model=(
+                None if data.get("simulation_model") is None else RobotModelConfig.from_dict(data["simulation_model"])
+            ),
             actuated_joints=tuple(str(item) for item in data["actuated_joints"]),
             initial_qpos=tuple(float(item) for item in data["initial_qpos"]),
             visual_frame_names=tuple(str(item) for item in data["visual_frame_names"]),
@@ -457,8 +461,29 @@ class RobotConfig:
     def robot_file_path(self) -> str:
         return self.model.loader_path()
 
+    @property
+    def simulation_file_path(self) -> str:
+        """Return the resolved simulation-model path.
+
+        Args:
+            None.
+
+        Returns:
+            Resolved path to the configured simulation model.
+        """
+        if self.simulation_model is None:
+            raise ValueError(f"Robot config {self.name} does not define simulation_model.")
+        return self.simulation_model.loader_path()
+
     def validate(self) -> None:
         self.model.validate()
+        if self.simulation_model is not None:
+            self.simulation_model.validate()
+            if self.simulation_model.type != "mjcf":
+                raise ValueError(
+                    f"Robot config {self.name} simulation_model must use type 'mjcf', "
+                    f"got {self.simulation_model.type!r}."
+                )
         if len(self.actuated_joints) != len(self.initial_qpos):
             raise ValueError(
                 f"Robot config {self.name} has {len(self.actuated_joints)} actuated joints "
@@ -819,6 +844,82 @@ class ViewerConfig:
 
 
 @dataclass(frozen=True)
+class MujocoSimulationConfig:
+    """Timing and command behavior for online headless MuJoCo execution."""
+
+    command_hz: float = 20.0
+    physics_timestep: float = 0.002
+    realtime: bool = True
+    ctrlrange_policy: str = "clip"
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "MujocoSimulationConfig":
+        """Build MuJoCo simulation settings from config data.
+
+        Args:
+            data: Optional mapping with timing and command-range settings.
+
+        Returns:
+            Typed MuJoCo simulation configuration.
+        """
+        data = {} if data is None else data
+        return cls(
+            command_hz=float(data.get("command_hz", 20.0)),
+            physics_timestep=float(data.get("physics_timestep", 0.002)),
+            realtime=bool(data.get("realtime", True)),
+            ctrlrange_policy=str(data.get("ctrlrange_policy", "clip")),
+        )
+
+    @property
+    def control_period(self) -> float:
+        """Return the simulated duration advanced for each retargeted frame.
+
+        Args:
+            None.
+
+        Returns:
+            Command period in seconds.
+        """
+        return 1.0 / self.command_hz
+
+    @property
+    def physics_steps_per_command(self) -> int:
+        """Return the integer number of physics steps per retargeting command.
+
+        Args:
+            None.
+
+        Returns:
+            Number of MuJoCo physics steps for one command period.
+        """
+        return int(round(self.control_period / self.physics_timestep))
+
+    def validate(self) -> None:
+        """Validate timing ratios and command-range behavior.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        if self.command_hz <= 0:
+            raise ValueError(f"command_hz must be positive, got {self.command_hz}.")
+        if self.physics_timestep <= 0:
+            raise ValueError(f"physics_timestep must be positive, got {self.physics_timestep}.")
+        if self.ctrlrange_policy not in {"clip", "error"}:
+            raise ValueError(
+                f"ctrlrange_policy must be 'clip' or 'error', got {self.ctrlrange_policy!r}."
+            )
+        steps = self.physics_steps_per_command
+        if steps <= 0 or not abs(steps * self.physics_timestep - self.control_period) <= 1e-12:
+            raise ValueError(
+                "command period must be an integer multiple of physics_timestep: "
+                f"period={self.control_period}, physics_timestep={self.physics_timestep}."
+            )
+
+
+@dataclass(frozen=True)
 class ReplayAppConfig:
     run_name: str | None
     runtime_root: str
@@ -916,3 +1017,22 @@ def load_replay_app_config(path: str | Path | Mapping[str, Any] | ReplayAppConfi
     if isinstance(path, ReplayAppConfig):
         return path
     return ReplayAppConfig.from_dict(_load_config_source(path))
+
+
+def load_mujoco_simulation_config(
+    path: str | Path | Mapping[str, Any] | MujocoSimulationConfig | None,
+) -> MujocoSimulationConfig:
+    """Load and validate online MuJoCo simulation settings.
+
+    Args:
+        path: YAML path, composed mapping, typed config, or None for defaults.
+
+    Returns:
+        Validated MuJoCo simulation configuration.
+    """
+    if isinstance(path, MujocoSimulationConfig):
+        config = path
+    else:
+        config = MujocoSimulationConfig.from_dict(None if path is None else _load_config_source(path))
+    config.validate()
+    return config

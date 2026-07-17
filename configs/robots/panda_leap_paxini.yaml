@@ -4,6 +4,10 @@ model:
   type: urdf
   path: assets/robots/panda_leap_paxini/urdf/panda_leap_paxini.urdf
   path_is_symlink: false
+simulation_model:
+  type: mjcf
+  path: assets/robots/panda_leap_paxini/mjcf/panda_leap_paxini.xml
+  path_is_symlink: false
 actuated_joints:
   - panda_joint1
   - panda_joint2

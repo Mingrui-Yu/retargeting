@@ -19,6 +19,10 @@ def test_robot_configs_load_and_validate_asset_paths():
             assert link_path.is_file()
         assert config.model.resolved_path().is_file()
         assert Path(config.robot_file_path).exists()
+        if config.name == "panda_leap_paxini":
+            assert config.simulation_model is not None
+            assert config.simulation_model.type == "mjcf"
+            assert Path(config.simulation_file_path).is_file()
         assert len(config.actuated_joints) == len(config.initial_qpos)
         assert config.wrist_frame_name in config.visual_frame_names
         assert config.benchmark.wrist_link_name in config.visual_frame_names
@@ -155,6 +159,26 @@ def test_default_teleoperation_mode_is_simulation():
     assert config.output.smoothing_alpha == 0.3
 
 
+def test_mujoco_simulator_config_uses_20_hz_integer_substeps():
+    """Verify the configured online command rate maps exactly to MuJoCo steps.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    from retargeting.config import load_mujoco_simulation_config
+
+    config = load_mujoco_simulation_config("configs/simulators/mujoco.yaml")
+
+    assert config.command_hz == 20.0
+    assert config.control_period == 0.05
+    assert config.physics_timestep == 0.002
+    assert config.physics_steps_per_command == 25
+    assert config.realtime is True
+
+
 def test_retargeting_config_accepts_vector_wrist_joint_class():
     from retargeting.config import load_config_data, load_retargeting_config
     from retargeting.core.optimizers import VectorWristJointOptimizer, get_optimizer_class
@@ -266,6 +290,8 @@ def test_base_config_selects_each_whitelisted_app():
     offline_config = compose_hydra_base_config(["app=offline_retarget"])
     replay_config = compose_hydra_base_config(["app=replay"])
     benchmark_config = compose_hydra_base_config(["app=benchmark"])
+    mujoco_config = compose_hydra_base_config(["app=mujoco_simulation"])
+    mujoco_offline_config = compose_hydra_base_config(["app=mujoco_offline_simulation"])
 
     assert offline_config["app"]["id"] == "offline_retarget"
     assert "profile" in offline_config
@@ -274,6 +300,17 @@ def test_base_config_selects_each_whitelisted_app():
     assert "profile" not in replay_config
     assert benchmark_config["app"]["id"] == "benchmark"
     assert "profile" not in benchmark_config
+    assert mujoco_config["app"]["id"] == "mujoco_simulation"
+    assert mujoco_config["profile"]["name"] == "vector_wrist_joint_panda_leap_paxini"
+    assert mujoco_config["simulator"]["command_hz"] == 20.0
+    assert "data" not in mujoco_config
+    assert "run_name" not in mujoco_config
+    assert mujoco_offline_config["app"]["id"] == "mujoco_offline_simulation"
+    assert mujoco_offline_config["data"].endswith(".npz")
+    assert mujoco_offline_config["source_hz"] == 20.0
+    assert mujoco_offline_config["simulator"]["command_hz"] == 20.0
+    assert mujoco_offline_config["simulator"]["realtime"] is False
+    assert "run_name" not in mujoco_offline_config
 
 
 def test_main_dispatcher_rejects_unknown_app_id():

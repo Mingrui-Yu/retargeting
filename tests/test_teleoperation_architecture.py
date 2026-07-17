@@ -54,3 +54,19 @@ def test_callback_solver_factory_is_owned_by_retargeting_core():
     from retargeting.core.solvers.callback import create_callback_solver as callback_create_callback_solver
 
     assert callback_create_callback_solver is create_callback_solver
+
+
+def test_mujoco_backend_remains_headless_and_viewer_independent():
+    """Protect the physics backend from optional GUI and vision imports.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    source = Path("src/retargeting/backends/mujoco.py").read_text(encoding="utf-8")
+
+    assert "mujoco.viewer" not in source
+    assert "open3d" not in source
+    assert "cv2" not in source

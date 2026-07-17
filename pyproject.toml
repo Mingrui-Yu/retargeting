@@ -28,7 +28,7 @@ dev = [
     "pytest",
 ]
 mujoco = [
-    "mujoco",
+    "mujoco>=3.0,<4",
 ]
 replay = [
     "viser",

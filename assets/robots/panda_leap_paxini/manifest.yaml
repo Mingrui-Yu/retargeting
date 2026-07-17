@@ -1,0 +1,7 @@
+schema_version: 1
+robot: panda_leap_paxini
+format: portable_robot_assets
+entrypoints:
+  urdf: urdf/panda_leap_paxini.urdf
+  mjcf: mjcf/panda_leap_paxini.xml
+meshes: meshes

@@ -87,7 +87,39 @@ def _run_benchmark(config: dict[str, Any], argv: list[str]) -> Any:
     return run_benchmark_app(config, argv=argv)
 
 
+def _run_mujoco_simulation(config: dict[str, Any], argv: list[str]) -> Any:
+    """Run live frame-by-frame retargeting into headless MuJoCo.
+
+    Args:
+        config: Composed online MuJoCo application configuration.
+        argv: Command-line overrides accepted by the shared app interface.
+
+    Returns:
+        Diagnostics from the last completed simulation frame.
+    """
+    from retargeting.apps.mujoco_simulation import run_mujoco_simulation_from_config
+
+    return run_mujoco_simulation_from_config(config, argv=argv)
+
+
+def _run_mujoco_offline_simulation(config: dict[str, Any], argv: list[str]) -> Any:
+    """Retarget raw offline human frames directly into headless MuJoCo.
+
+    Args:
+        config: Composed offline-human MuJoCo application configuration.
+        argv: Command-line overrides accepted by the shared app interface.
+
+    Returns:
+        Diagnostics from the final processed human frame.
+    """
+    from retargeting.apps.mujoco_offline_simulation import run_mujoco_offline_simulation_from_config
+
+    return run_mujoco_offline_simulation_from_config(config, argv=argv)
+
+
 APP_RUNNERS: dict[str, AppRunner] = {
+    "mujoco_offline_simulation": _run_mujoco_offline_simulation,
+    "mujoco_simulation": _run_mujoco_simulation,
     "offline_retarget": _run_offline_retarget,
     "replay": _run_replay,
     "benchmark": _run_benchmark,

@@ -1,155 +1,325 @@
-import time
+"""Headless MuJoCo robot backend for online joint-position execution."""
 
-import cv2
-import mujoco
-import mujoco.viewer
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Sequence
+
 import numpy as np
-import open3d as o3d
-from mr_utils.utils_calc import (
-    camera_orientation_opengl_to_common,
-    posQuat2Isometry3d,
-    posRotMat2Isometry3d,
-    quatWXYZ2XYZW,
-    rgbd_to_pointcloud,
-    transformPositions,
-)
-from mr_utils.utils_open3d import create_coordinate_frame, o3d_vis_pointcloud_with_color, rgbd_to_pointcloud_by_open3d
+
+from retargeting.config import MujocoSimulationConfig, load_mujoco_simulation_config
+
+try:
+    import mujoco
+except ModuleNotFoundError as _MUJOCO_IMPORT_ERROR:
+    mujoco = None
+else:
+    _MUJOCO_IMPORT_ERROR = None
 
 
-# Function to check if body name exists
-def body_name_exists(model, body_name):
-    try:
-        _ = model.body(body_name).id
-        return True  # The body exists
-    except IndexError:
-        return False  # The body does not exist
+def _require_mujoco() -> Any:
+    """Return the optional MuJoCo module or raise an actionable error.
+
+    Args:
+        None.
+
+    Returns:
+        Imported MuJoCo Python module.
+    """
+    if mujoco is None:
+        raise ModuleNotFoundError(
+            "MuJoCo support is not installed. Install it with `pip install -e \".[mujoco]\"`."
+        ) from _MUJOCO_IMPORT_ERROR
+    return mujoco
 
 
-class RobotMujoco:
-    def __init__(self, robot_file_path):
-        # hyper-parameters for simulation
-        self.timestep = 0.1
-        self.sim_timestep = 0.001
-        self.viewer_cam_distance = 2.0
-        self.view_cam_lookat = [0.2, -0.2, 0.2]
-        self.viewer_fps = 50
-        self.disable_gravity = False
+class MujocoRobotBackend:
+    """Execute robot joint-position commands in MuJoCo without a viewer."""
 
-        # hyper-parameters for the robot
-        self.n_arm_joints = 7
-        self.arm_joint_names = [f"panda_joint{i + 1}" for i in range(self.n_arm_joints)]
-        self.arm_actuator_names = [f"panda_actuator_{i + 1}" for i in range(self.n_arm_joints)]
-        self.n_hand_joints = 16
-        self.hand_joint_names = [f"joint_{i}" for i in range(self.n_hand_joints)]
-        self.hand_actuator_names = [f"actuator_{i}" for i in range(self.n_hand_joints)]
-        self.fingertip_names = [
-            "thumb_fingertip_new",
-            "fingertip_new",
-            "fingertip_2_new",
-            "fingertip_3_new",
-        ]
-        self.fingertip_center_names = [
-            "thumb_tip_center",
-            "finger1_tip_center",
-            "finger2_tip_center",
-            "finger3_tip_center",
-        ]
-        self.fingertip_geom_names = [f"{fingertip_name}_g" for fingertip_name in self.fingertip_names]
+    def __init__(
+        self,
+        model_path: str | Path,
+        joint_names: Sequence[str],
+        initial_qpos: Sequence[float],
+        config: MujocoSimulationConfig | dict[str, Any] | None = None,
+    ) -> None:
+        """Load a model and bind configured robot joints to position actuators.
 
-        self.n_joints = self.n_arm_joints + self.n_hand_joints
-        self.joint_names = self.arm_joint_names + self.hand_joint_names
-        self.actuator_names = self.arm_actuator_names + self.hand_actuator_names
+        Args:
+            model_path: MJCF file containing the robot and its position actuators.
+            joint_names: Command order shared with the retargeting robot config.
+            initial_qpos: Initial joint configuration in ``joint_names`` order.
+            config: Online MuJoCo timing and command-range settings.
 
-        # variable
-        self.n_step = 0
-        self.target_joint_pos = np.zeros((self.n_joints))
-        self.joint_torques = np.zeros((self.n_joints))
-
-        self.model = mujoco.MjModel.from_xml_path(robot_file_path)
-        self.data = mujoco.MjData(self.model)
-        self.model.opt.timestep = self.sim_timestep
-        if self.disable_gravity:
-            self.model.opt.gravity = [0.0, 0.0, 0.0]  # disable gravity
-        self.viewer = mujoco.viewer.launch_passive(self.model, self.data)
-        self.viewer.cam.distance = self.viewer_cam_distance
-        self.viewer.cam.lookat = self.view_cam_lookat
-        self.viewer.cam.azimuth = -90
-        self.viewer.cam.elevation = -25
-        self.viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = True
-        self.viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTFORCE] = True
-
-        self.initial_robot_config()
-
-    def initial_robot_config(self):
-        joint_pos = np.zeros((self.n_joints))
-        joint_pos[:7] = np.array([0, -np.pi / 4, 0.0, -3.0 / 4.0 * np.pi, 0, np.pi / 2.0, 1.0 / 4.0 * np.pi])
-        self.set_joint_pos(joint_pos)
-        self.sim_step(refresh=True)
-
-    def step(self):
-        for i in range(int(self.timestep / self.sim_timestep)):
-            self.sim_step()
-
-    def sim_step(self, refresh=False):
+        Returns:
+            None.
         """
-        One low-level simulation step.
+        mj = _require_mujoco()
+        self.config = load_mujoco_simulation_config(config)
+        self.joint_names = tuple(str(name) for name in joint_names)
+        if not self.joint_names or len(set(self.joint_names)) != len(self.joint_names):
+            raise ValueError("joint_names must be non-empty and unique.")
+
+        self.model_path = Path(model_path).resolve()
+        self.model = mj.MjModel.from_xml_path(str(self.model_path))
+        self.model.opt.timestep = self.config.physics_timestep
+        self.data = mj.MjData(self.model)
+        self._joint_ids, self._qpos_addresses, self._qvel_addresses = self._resolve_joint_indices()
+        self._actuator_ids = self._resolve_actuator_indices()
+        self._ctrl_limited = self.model.actuator_ctrllimited[self._actuator_ids].astype(bool)
+        self._ctrlrange = self.model.actuator_ctrlrange[self._actuator_ids].copy()
+        self.initial_qpos = self._validate_qpos(initial_qpos, "initial_qpos")
+        self.target_joint_pos = self.initial_qpos.copy()
+        self.reset(self.initial_qpos)
+
+    @property
+    def control_period(self) -> float:
+        """Return simulated seconds advanced by one high-level step.
+
+        Args:
+            None.
+
+        Returns:
+            Command period in seconds.
         """
-        mujoco.mj_step(self.model, self.data)
-        if self.n_step % (int(1.0 / self.sim_timestep) / self.viewer_fps) == 0 or refresh:
-            self.viewer.sync()
-        self.n_step += 1
+        return self.config.control_period
 
-    def set_joint_pos(self, qpos):
+    @property
+    def physics_steps_per_command(self) -> int:
+        """Return physics substeps executed for each retargeting frame.
+
+        Args:
+            None.
+
+        Returns:
+            Integer MuJoCo substep count.
         """
-        Force set the joint positions (ignoring physics)
+        return self.config.physics_steps_per_command
 
+    @property
+    def joint_ctrlrange(self) -> tuple[np.ndarray, np.ndarray]:
+        """Return actuator control bounds in retargeting joint order.
+
+        Args:
+            None.
+
+        Returns:
+            Lower and upper control-bound arrays. Unbounded actuators use infinities.
         """
-        assert len(qpos) == self.n_joints
-        for i, joint_name in enumerate(self.joint_names):
-            self.data.joint(joint_name).qpos = qpos[i]
-        self.ctrl_joint_pos(qpos)
+        lower = np.full(len(self.joint_names), -np.inf, dtype=float)
+        upper = np.full(len(self.joint_names), np.inf, dtype=float)
+        lower[self._ctrl_limited] = self._ctrlrange[self._ctrl_limited, 0]
+        upper[self._ctrl_limited] = self._ctrlrange[self._ctrl_limited, 1]
+        return lower, upper
 
-    def get_joint_pos(self):
-        joint_pos = np.zeros((self.n_joints))
-        for i, joint_name in enumerate(self.joint_names):
-            joint_pos[i] = self.data.joint(joint_name).qpos[0]
-        return joint_pos
+    def _resolve_joint_indices(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Resolve scalar joint state addresses by configured name.
 
-    def get_target_joint_pos(self):
+        Args:
+            None.
+
+        Returns:
+            Arrays of joint ids, qpos addresses, and qvel addresses.
+        """
+        mj = _require_mujoco()
+        joint_ids = []
+        for name in self.joint_names:
+            joint_id = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_JOINT, name)
+            if joint_id < 0:
+                raise ValueError(f"MJCF is missing configured joint {name!r}.")
+            joint_type = int(self.model.jnt_type[joint_id])
+            if joint_type not in {int(mj.mjtJoint.mjJNT_HINGE), int(mj.mjtJoint.mjJNT_SLIDE)}:
+                raise ValueError(f"Configured joint {name!r} must be a scalar hinge or slide joint.")
+            joint_ids.append(joint_id)
+        joint_ids_array = np.asarray(joint_ids, dtype=int)
+        return (
+            joint_ids_array,
+            self.model.jnt_qposadr[joint_ids_array].astype(int),
+            self.model.jnt_dofadr[joint_ids_array].astype(int),
+        )
+
+    def _resolve_actuator_indices(self) -> np.ndarray:
+        """Resolve exactly one joint-transmission actuator for every command joint.
+
+        Args:
+            None.
+
+        Returns:
+            Actuator ids in configured retargeting joint order.
+        """
+        mj = _require_mujoco()
+        actuator_ids = []
+        for name, joint_id in zip(self.joint_names, self._joint_ids):
+            candidates = np.flatnonzero(
+                (self.model.actuator_trntype == int(mj.mjtTrn.mjTRN_JOINT))
+                & (self.model.actuator_trnid[:, 0] == joint_id)
+            )
+            if len(candidates) != 1:
+                raise ValueError(
+                    f"Configured joint {name!r} requires exactly one joint actuator, found {len(candidates)}."
+                )
+            actuator_id = int(candidates[0])
+            gain = float(self.model.actuator_gainprm[actuator_id, 0])
+            position_bias = float(self.model.actuator_biasprm[actuator_id, 1])
+            gear = self.model.actuator_gear[actuator_id]
+            if gain <= 0 or not np.isclose(position_bias, -gain) or not np.allclose(
+                gear, np.array([1.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+            ):
+                raise ValueError(
+                    f"Actuator for joint {name!r} must be a unit-gear position servo whose ctrl is target qpos."
+                )
+            actuator_ids.append(actuator_id)
+        return np.asarray(actuator_ids, dtype=int)
+
+    def _validate_qpos(self, qpos: Sequence[float], field_name: str) -> np.ndarray:
+        """Validate and copy a command vector in configured joint order.
+
+        Args:
+            qpos: Joint-position values to validate.
+            field_name: Name used in validation errors.
+
+        Returns:
+            Finite one-dimensional float array.
+        """
+        values = np.asarray(qpos, dtype=float)
+        expected_shape = (len(self.joint_names),)
+        if values.shape != expected_shape:
+            raise ValueError(f"{field_name} must have shape {expected_shape}, got {values.shape}.")
+        if not np.isfinite(values).all():
+            raise ValueError(f"{field_name} must contain only finite values.")
+        return values.copy()
+
+    def _apply_ctrlrange(self, qpos: np.ndarray) -> np.ndarray:
+        """Apply the configured actuator-range policy to a validated command.
+
+        Args:
+            qpos: Validated command in configured joint order.
+
+        Returns:
+            Command accepted by the actuator control ranges.
+        """
+        lower, upper = self.joint_ctrlrange
+        outside = (qpos < lower) | (qpos > upper)
+        if outside.any() and self.config.ctrlrange_policy == "error":
+            details = [
+                f"{self.joint_names[i]}={qpos[i]:.6g} not in [{lower[i]:.6g}, {upper[i]:.6g}]"
+                for i in np.flatnonzero(outside)
+            ]
+            raise ValueError("Joint command exceeds MuJoCo actuator ctrlrange: " + ", ".join(details))
+        return np.clip(qpos, lower, upper)
+
+    def reset(self, qpos: Sequence[float] | None = None) -> None:
+        """Reset all simulation state and synchronize position targets.
+
+        Args:
+            qpos: Optional reset configuration; defaults to configured initial qpos.
+
+        Returns:
+            None.
+        """
+        mj = _require_mujoco()
+        reset_qpos = self.initial_qpos if qpos is None else self._validate_qpos(qpos, "qpos")
+        reset_qpos = self._apply_ctrlrange(reset_qpos)
+        mj.mj_resetData(self.model, self.data)
+        self.data.qpos[self._qpos_addresses] = reset_qpos
+        self.data.ctrl[self._actuator_ids] = reset_qpos
+        self.target_joint_pos = reset_qpos.copy()
+        mj.mj_forward(self.model, self.data)
+
+    def ctrl_joint_pos(self, qpos: Sequence[float]) -> np.ndarray:
+        """Set one position target without advancing simulation time.
+
+        Args:
+            qpos: Desired joint positions in configured retargeting order.
+
+        Returns:
+            Applied command after the configured actuator-range policy.
+        """
+        command = self._apply_ctrlrange(self._validate_qpos(qpos, "qpos"))
+        self.data.ctrl[self._actuator_ids] = command
+        self.target_joint_pos = command.copy()
+        return command.copy()
+
+    def step(self) -> None:
+        """Advance one complete 20 Hz retargeting command period.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        mj = _require_mujoco()
+        mj.mj_step(self.model, self.data, nstep=self.physics_steps_per_command)
+
+    def get_joint_pos(self) -> np.ndarray:
+        """Return simulated joint positions in retargeting order.
+
+        Args:
+            None.
+
+        Returns:
+            Current joint-position vector.
+        """
+        return self.data.qpos[self._qpos_addresses].copy()
+
+    def get_joint_vel(self) -> np.ndarray:
+        """Return simulated joint velocities in retargeting order.
+
+        Args:
+            None.
+
+        Returns:
+            Current joint-velocity vector.
+        """
+        return self.data.qvel[self._qvel_addresses].copy()
+
+    def get_target_joint_pos(self) -> np.ndarray:
+        """Return the last applied position command.
+
+        Args:
+            None.
+
+        Returns:
+            Target joint-position vector.
+        """
         return self.target_joint_pos.copy()
 
-    def get_joint_torques(self):
-        for i, actuator_name in enumerate(self.actuator_names):
-            self.joint_torques[i] = self.data.actuator(actuator_name).force[0]
-        return self.joint_torques.copy()
+    def get_joint_torques(self) -> np.ndarray:
+        """Return actuator forces in configured joint order.
 
-    def ctrl_joint_pos(self, target_joint_pos):
-        assert len(target_joint_pos) == self.n_joints
-        for i, actuator_name in enumerate(self.actuator_names):
-            self.data.actuator(actuator_name).ctrl = target_joint_pos[i]
-        self.target_joint_pos[:] = target_joint_pos[:]
+        Args:
+            None.
 
-    def get_object_pose(self, body_name):
-        name = body_name
-        if not body_name_exists(self.model, name):
-            raise NameError(f"Body {name} does not exist.")
+        Returns:
+            Current actuator force vector.
+        """
+        return self.data.actuator_force[self._actuator_ids].copy()
 
-        pos = self.data.body(name).xpos.copy()
-        rot_mat = self.data.body(name).xmat.copy().reshape(3, 3)
-        pose = posRotMat2Isometry3d(pos, rot_mat)
-        return pose
+    def get_diagnostics(self) -> dict[str, float]:
+        """Return compact headless simulation diagnostics for the current state.
+
+        Args:
+            None.
+
+        Returns:
+            Scalar simulation time, tracking, velocity, force, and contact metrics.
+        """
+        tracking_error = self.get_joint_pos() - self.target_joint_pos
+        qvel = self.get_joint_vel()
+        force = self.get_joint_torques()
+        return {
+            "simulation_time": float(self.data.time),
+            "tracking_error_max": float(np.max(np.abs(tracking_error))),
+            "tracking_error_rms": float(np.sqrt(np.mean(np.square(tracking_error)))),
+            "joint_velocity_max": float(np.max(np.abs(qvel))),
+            "actuator_force_max": float(np.max(np.abs(force))),
+            "contact_count": float(self.data.ncon),
+        }
 
 
-def test_env():
-    robot_mujoco = RobotMujoco(robot_file_path="./assets/scenes/scene.xml")
-    while True:
-        step_start = time.time()
-        robot_mujoco.step()
-        # Rudimentary time keeping, will drift relative to wall clock.
-        time_until_next_step = robot_mujoco.model.opt.timestep - (time.time() - step_start)
-        if time_until_next_step > 0:
-            time.sleep(time_until_next_step)
+# Preserve the compatibility import used by the legacy ROS workspace.
+RobotMujoco = MujocoRobotBackend
 
 
-if __name__ == "__main__":
-    test_env()
+__all__ = ["MujocoRobotBackend", "RobotMujoco"]

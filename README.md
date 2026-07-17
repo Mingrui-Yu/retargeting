@@ -75,6 +75,30 @@ pip install -e ".[avp]"
 pip install -e ".[dev]"
 ```
 
+For live AVP retargeting directly into headless MuJoCo, install both optional groups and run the online app:
+
+```bash
+pip install -e ".[avp,mujoco]"
+python -m retargeting.main app=mujoco_simulation avp_ip=192.168.52.6
+```
+
+The app retargets at 20 Hz. Each detected frame is commanded immediately, followed by 25 MuJoCo physics steps at
+`0.002 s`; it does not create or replay a joint trajectory. Set `simulator.realtime=false` for deterministic
+faster-than-wall-clock headless debugging, or `max_frames=N` for a bounded run.
+
+To load a raw offline human trajectory and retarget each frame directly into MuJoCo, use the offline simulation app:
+
+```bash
+pip install -e ".[mujoco]"
+python -m retargeting.main app=mujoco_offline_simulation \
+  data=tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz
+```
+
+This path reads only the raw `stream_*` human arrays. It ignores any existing `retarget_qpos` in the input file and
+does not create an intermediate robot trajectory. Each source frame is retargeted once and advances exactly `0.05 s`
+of simulated time; use `start` and `end` to select a contiguous source interval.
+The source is required to be 20 Hz until timestamp-based resampling is implemented.
+
 Install the GPU-enabled PyTorch build that matches your CUDA driver and runtime from the [official PyTorch instructions](https://pytorch.org/). PyTorch is required for optimizer paths, but it is not pinned in `pyproject.toml` because the correct wheel depends on your CUDA environment. This codebase has been tested with CUDA 12.8 and PyTorch `2.11.0+cu128`.
 
 ROS/RViz and real robot paths additionally require ROS2 Humble and the ROS packages listed in [ROS And RViz](#ros-and-rviz).

@@ -1,4 +1,8 @@
+import xml.etree.ElementTree as ET
 from pathlib import Path
+
+import pytest
+import yaml
 
 
 def test_asset_resolver_handles_current_robot_asset_paths():
@@ -91,10 +95,8 @@ def test_unused_root_level_scene_xml_is_removed():
     assert not Path("assets/scene.xml").exists()
 
 
-def test_robot_asset_component_symlinks_target_shared_meshes():
+def test_panda_shadow_component_symlinks_target_shared_meshes():
     expected_targets = {
-        Path("assets/robots/panda_leap_paxini/urdf/panda"): Path("assets/meshes/panda"),
-        Path("assets/robots/panda_leap_paxini/urdf/leap_hand"): Path("assets/meshes/leap_hand"),
         Path("assets/robots/panda_shadow/urdf/panda"): Path("assets/meshes/panda"),
         Path("assets/robots/panda_shadow/urdf/shadow_hand"): Path("assets/meshes/shadow_hand"),
     }
@@ -102,6 +104,68 @@ def test_robot_asset_component_symlinks_target_shared_meshes():
     for link_path, target_path in expected_targets.items():
         assert link_path.is_symlink()
         assert link_path.resolve() == target_path.resolve()
+
+
+def test_panda_leap_paxini_portable_bundle_is_self_contained():
+    """Validate the public bundle manifest and every description resource path.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    assets_dir = Path("assets/robots/panda_leap_paxini")
+    manifest_path = assets_dir / "manifest.yaml"
+    urdf_path = assets_dir / "urdf/panda_leap_paxini.urdf"
+    mjcf_path = assets_dir / "mjcf/panda_leap_paxini.xml"
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+
+    assert manifest["robot"] == "panda_leap_paxini"
+    assert manifest["format"] == "portable_robot_assets"
+    assert manifest["entrypoints"] == {
+        "urdf": "urdf/panda_leap_paxini.urdf",
+        "mjcf": "mjcf/panda_leap_paxini.xml",
+    }
+    assert manifest["meshes"] == "meshes"
+    assert not [path for path in assets_dir.rglob("*") if path.is_symlink()]
+
+    # Both public descriptions must use only relative files contained by this bundle.
+    path_attributes = ("filename", "file", "meshdir", "texturedir")
+    referenced_urdf_meshes = set()
+    for xml_path in (urdf_path, mjcf_path):
+        for element in ET.parse(xml_path).getroot().iter():
+            for attribute in path_attributes:
+                value = element.get(attribute)
+                if not value:
+                    continue
+                assert not Path(value).is_absolute()
+                assert not value.startswith("package://")
+                resolved_path = (xml_path.parent / value).resolve()
+                resolved_path.relative_to(assets_dir.resolve())
+                assert resolved_path.is_file()
+                if xml_path == urdf_path and element.tag == "mesh" and attribute == "filename":
+                    referenced_urdf_meshes.add(resolved_path)
+
+    bundle_meshes = {path.resolve() for path in (assets_dir / "meshes").rglob("*") if path.is_file()}
+    assert referenced_urdf_meshes == bundle_meshes
+
+
+def test_panda_leap_paxini_portable_mjcf_compiles_headlessly():
+    """Compile the portable MJCF without opening a MuJoCo viewer.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    mujoco = pytest.importorskip("mujoco")
+    model = mujoco.MjModel.from_xml_path(
+        str(Path("assets/robots/panda_leap_paxini/mjcf/panda_leap_paxini.xml"))
+    )
+
+    assert (model.nbody, model.njnt, model.ngeom, model.nu, model.nsensor, model.nkey) == (44, 23, 66, 23, 0, 1)
 
 
 def test_replay_app_requires_a_saved_artifact_not_raw_input_data():
