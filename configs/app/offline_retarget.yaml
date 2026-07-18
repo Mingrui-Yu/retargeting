@@ -2,7 +2,6 @@
 defaults:
   - /retargeting_profiles: vector_wrist_joint_panda_leap_paxini
   - /inputs: avp
-  - /teleoperation_modes: simulation
   - /solvers: nlopt_slsqp
   # Reuse the standalone apps' defaults for post-processing actions.
   - /app/benchmark@post.benchmark

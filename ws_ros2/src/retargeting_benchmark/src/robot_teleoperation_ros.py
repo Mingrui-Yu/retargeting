@@ -53,7 +53,7 @@ class RobotTeleoperationRos(Node):
         robot_config = load_robot_config(repo_root / profile_config.robot)
         method_config = load_retargeting_config(repo_root / profile_config.method)
         solver_config = load_solver_config(repo_root / "configs/solvers/nlopt_slsqp.yaml")
-        mode_config = load_teleoperation_mode_config(repo_root / "configs/teleoperation_modes/simulation.yaml")
+        mode_config = load_teleoperation_mode_config(None)
         command_config = load_teleoperation_command_config(profile_source, robot_config=robot_config)
         robot_model = RobotPinocchio(robot_config.robot_file_path, robot_config.model.type)
         robot_adaptor = RobotAdaptor(robot_model, actuated_joints_name=list(robot_config.actuated_joints))

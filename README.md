@@ -131,8 +131,9 @@ until Ctrl+C. Before every repeated cycle, MuJoCo, temporal retargeting referenc
 alignment are reset to the configured robot initial qpos. The source is required to be 20 Hz until timestamp-based
 resampling is implemented; startup interpolation intentionally advances more simulated time than the source timeline.
 
-To watch the same frame-by-frame simulation in a browser, install the dedicated Web viewer extra and enable the
-passive `mjviser` adapter:
+To watch execution in a browser, enable the backend-aware viewer. `viewer.type=auto` selects the standard Viser URDF
+adapter for a kinematic backend and the passive `mjviser` adapter for a MuJoCo backend. Install `.[replay]` for the
+standard adapter or the dedicated MuJoCo Web viewer extra for `mjviser`:
 
 ```bash
 pip install -e ".[mujoco-web]"
@@ -153,6 +154,13 @@ should not be exposed directly. Continuous playback exits and closes the viewer 
 The mjviser UI includes a read-only `Joint angles` tab. It reports all 23 Panda+Leap hinge-joint values in radians
 from the live MuJoCo `data.qpos` after each completed command period. These are actual simulated joint angles rather
 than retargeting requests or actuator targets; the fields cannot write back to the simulation.
+
+Both execution viewer types also render the current mapped human hand as MANO keypoints, skeleton connections, and
+a wrist coordinate frame. Human geometry updates once per source frame from `RetargetingHandObservation`, while the
+robot continues updating after every backend command period. Frames without a valid mapped observation hide the
+human geometry immediately. In mjviser, the human nodes inherit the same camera-tracking scene offset as the MuJoCo
+model, so toggling `Track camera` does not change their relative alignment. Use `viewer.human_keypoint_size` to
+adjust the rendered keypoint size.
 
 Install the GPU-enabled PyTorch build that matches your CUDA driver and runtime from the [official PyTorch instructions](https://pytorch.org/). PyTorch is required for optimizer paths, but it is not pinned in `pyproject.toml` because the correct wheel depends on your CUDA environment. This codebase has been tested with CUDA 12.8 and PyTorch `2.11.0+cu128`.
 

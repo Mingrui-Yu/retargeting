@@ -307,10 +307,11 @@ The configured `input.source_hz` must match the backend command rate until times
 startup, one source frame can advance multiple command periods, so simulation time intentionally exceeds the source
 timeline.
 
-### Offline MuJoCo Web Visualization
+### Execution Web Visualization
 
-`app=teleop_exe teleoperation_modes=offline_mujoco` can publish its live MuJoCo state through the optional passive
-`mjviser` adapter:
+`app=teleop_exe` can publish execution through a backend-aware Web viewer. With `viewer.type=auto`, a kinematic
+backend uses the standard Viser URDF adapter and a MuJoCo backend uses the passive `mjviser` adapter. Install
+`.[replay]` for standard Viser or `.[mujoco-web]` for the MuJoCo path:
 
 ```bash
 pip install -e ".[mujoco-web]"
@@ -328,9 +329,18 @@ MuJoCo joint ids, resolves each hinge joint through `model.jnt_qposadr`, and dis
 `data.qpos` value in radians. The current Panda+Leap MJCF has 23 hinge joints, all of which are updated atomically
 after every viewer frame. No input callback is registered, so these fields cannot modify simulation state.
 
+Both `mjviser` and standard `viser` execution adapters share the same human-hand renderer. It transforms each
+canonical `RetargetingHandObservation` into robot-world MANO keypoints, skeleton segments, and a wrist frame, then
+updates persistent Viser handles once per completed source frame. A source frame without a valid observation, or a
+flow reset, hides the human nodes instead of leaving stale geometry visible. Robot state publication remains on the
+command-period observer so startup interpolation is still shown at full resolution. The mjviser adapter mounts its
+human nodes below mjviser's `/fixed_bodies` frame, which applies the same camera-tracking `scene_offset` used by the
+MuJoCo geometry. Turning `Track camera` on or off therefore moves both layers together.
+
 ```yaml
 viewer:
   enabled: false
+  type: auto
   host: 0.0.0.0
   port: 9219
   wait_for_client: true
@@ -338,6 +348,9 @@ viewer:
   camera_distance: -1.0
   camera_azimuth: 120.0
   camera_elevation: 20.0
+  human_keypoint_size: 0.005
+  initial_camera_position: [0.6, 0.6, 0.5]
+  initial_camera_look_at: [0.0, 0.0, 0.45]
 ```
 
 With `wait_for_client=true`, no source frame is consumed until a browser connects. Use

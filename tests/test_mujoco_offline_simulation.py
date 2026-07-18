@@ -185,6 +185,39 @@ class _FakeVisualizer:
         self.close_count += 1
 
 
+class _FakeAutoVisualizerFactory:
+    """Record app-level execution viewer creation without opening a server."""
+
+    def __init__(self, visualizer: _FakeVisualizer) -> None:
+        """Store the visualizer returned to the app under test.
+
+        Args:
+            visualizer: Fake viewer returned for every enabled request.
+
+        Returns:
+            None.
+        """
+        self.visualizer = visualizer
+        self.calls = []
+
+    def __call__(self, config_data, flow) -> _FakeVisualizer:
+        """Register the factory inputs and attach passive observer updates.
+
+        Args:
+            config_data: Plain composed app config.
+            flow: Fake execution flow receiving observer callbacks.
+
+        Returns:
+            Fake visualizer with lifecycle counters.
+        """
+        self.calls.append((config_data, flow))
+        self.visualizer.update()
+        flow.add_command_observer(lambda result: self.visualizer.update())
+        flow.add_reset_observer(lambda qpos: self.visualizer.update())
+        self.visualizer.wait_for_client()
+        return self.visualizer
+
+
 class _FakeAppFlow:
     """Complete-flow fake used to test thin application lifecycle behavior."""
 
@@ -289,18 +322,16 @@ def test_offline_app_uses_flow_run_and_passive_viewer_observers(monkeypatch):
 
     flow = _FakeAppFlow()
     visualizer = _FakeVisualizer()
+    factory = _FakeAutoVisualizerFactory(visualizer)
     monkeypatch.setattr(teleop_exe, "build_execution_flow", lambda config: flow)
-    monkeypatch.setattr(
-        teleop_exe,
-        "create_mujoco_web_visualizer",
-        lambda model, data, config: visualizer,
-    )
+    monkeypatch.setattr(teleop_exe, "create_optional_execution_visualizer", factory)
 
     summary = teleop_exe.run(
         {"data": "human.npz", "viewer": {"enabled": True}, "log_every_frames": 20},
         [],
     )
 
+    assert factory.calls == [({"data": "human.npz", "viewer": {"enabled": True}, "log_every_frames": 20}, flow)]
     assert visualizer.update_count == 4
     assert visualizer.wait_for_client_count == 1
     assert visualizer.wait_after_completion_count == 1
@@ -316,12 +347,9 @@ def test_offline_app_observes_reset_between_loop_cycles(monkeypatch):
 
     flow = _FakeAppFlow(loop=True)
     visualizer = _FakeVisualizer()
+    factory = _FakeAutoVisualizerFactory(visualizer)
     monkeypatch.setattr(teleop_exe, "build_execution_flow", lambda config: flow)
-    monkeypatch.setattr(
-        teleop_exe,
-        "create_mujoco_web_visualizer",
-        lambda model, data, config: visualizer,
-    )
+    monkeypatch.setattr(teleop_exe, "create_optional_execution_visualizer", factory)
 
     summary = teleop_exe.run(
         {"data": "human.npz", "loop": True, "viewer": {"enabled": True}},
@@ -340,12 +368,9 @@ def test_offline_app_closes_viewer_when_flow_fails(monkeypatch):
 
     flow = _FakeAppFlow(fail=True)
     visualizer = _FakeVisualizer()
+    factory = _FakeAutoVisualizerFactory(visualizer)
     monkeypatch.setattr(teleop_exe, "build_execution_flow", lambda config: flow)
-    monkeypatch.setattr(
-        teleop_exe,
-        "create_mujoco_web_visualizer",
-        lambda model, data, config: visualizer,
-    )
+    monkeypatch.setattr(teleop_exe, "create_optional_execution_visualizer", factory)
 
     with pytest.raises(RuntimeError, match="frame failure"):
         teleop_exe.run({"data": "human.npz", "viewer": {"enabled": True}}, [])

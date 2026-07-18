@@ -215,7 +215,7 @@ def test_import_application_entrypoint_succeeds_without_optional_adapters():
         import retargeting_apps
         import retargeting_apps.apps.teleop_exe
         import retargeting_apps.main
-        import retargeting_apps.visualization.mjviser_live
+        import retargeting_apps.visualization.execution.mjviser
         """
     )
     result = subprocess.run(

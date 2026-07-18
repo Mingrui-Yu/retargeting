@@ -7,9 +7,12 @@ from collections.abc import Callable
 from typing import Any
 
 from retargeting_apps.config import MujocoWebViewerConfig
+from retargeting_apps.visualization.viser_scene import ViserHandObservationRenderer
+from retargeting.core.types import RetargetingHandObservation
 
 
 _JOINT_ANGLE_DECIMALS = 5
+_MJVISER_WORLD_FRAME = "/fixed_bodies"
 
 
 def _load_mjviser_dependencies() -> tuple[Any, Any, Any]:
@@ -70,6 +73,12 @@ class MujocoWebVisualizer:
                 camera_elevation=config.camera_elevation,
             )
             self._joint_angle_handles = self._create_joint_angle_gui(mujoco, viser, tabs)
+            self._hand_renderer = ViserHandObservationRenderer(
+                self.server,
+                point_size=config.human_keypoint_size,
+                # mjviser applies its camera-tracking scene offset to this frame.
+                root_node_name=f"{_MJVISER_WORLD_FRAME}/current/human",
+            )
         except Exception:
             self.server.stop()
             raise
@@ -133,6 +142,28 @@ class MujocoWebVisualizer:
         """
         self.scene.update_from_mjdata(self.data)
         self._update_joint_angles()
+
+    def update_observation(self, observation: RetargetingHandObservation) -> None:
+        """Publish one canonical human-hand observation in the MuJoCo scene.
+
+        Args:
+            observation: Canonical hand observation produced by the mapping layer.
+
+        Returns:
+            None.
+        """
+        self._hand_renderer.update_observation(observation)
+
+    def hide_observation(self) -> None:
+        """Hide the current human hand when no valid observation is available.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        self._hand_renderer.hide()
 
     def wait_for_client(self) -> None:
         """Optionally wait until at least one browser has connected.

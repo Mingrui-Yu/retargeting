@@ -211,6 +211,7 @@ class _FakeViserServer:
         self.stop_count = 0
         self.atomic_count = 0
         self.gui = _FakeGui()
+        self.scene = SimpleNamespace()
         self.instances.append(self)
 
     def get_port(self) -> int:
@@ -316,7 +317,7 @@ def test_mjviser_adapter_passively_updates_and_manages_lifecycle(monkeypatch):
         None.
     """
     from retargeting_apps.config import MujocoWebViewerConfig
-    from retargeting_apps.visualization import mjviser_live
+    from retargeting_apps.visualization.execution import mjviser
 
     _FakeViserServer.instances.clear()
     _FakeMujocoScene.instances.clear()
@@ -325,7 +326,7 @@ def test_mjviser_adapter_passively_updates_and_manages_lifecycle(monkeypatch):
         Icon=SimpleNamespace(ADJUSTMENTS="adjustments"),
     )
     monkeypatch.setattr(
-        mjviser_live,
+        mjviser,
         "_load_mjviser_dependencies",
         lambda: (_FAKE_MUJOCO, fake_viser, _FakeMujocoScene),
     )
@@ -360,7 +361,7 @@ def test_mjviser_adapter_passively_updates_and_manages_lifecycle(monkeypatch):
         camera_azimuth=90.0,
         camera_elevation=30.0,
     )
-    visualizer = mjviser_live.MujocoWebVisualizer(model, data, config, sleep=sleep)
+    visualizer = mjviser.MujocoWebVisualizer(model, data, config, sleep=sleep)
 
     visualizer.update()
     visualizer.wait_for_client()
@@ -384,6 +385,7 @@ def test_mjviser_adapter_passively_updates_and_manages_lifecycle(monkeypatch):
     }
     assert scene.updated_data == [data]
     assert scene.tabs.tabs == [("Joint angles", "adjustments")]
+    assert visualizer._hand_renderer.root_node_name == "/fixed_bodies/current/human"
     assert [handle.label for handle in server.gui.numbers] == [
         "joint_b [rad]",
         "joint_a [rad]",
@@ -407,7 +409,7 @@ def test_joint_angle_readouts_cover_all_panda_leap_joints_and_qpos_addresses(mon
 
     from retargeting.config import load_robot_config
     from retargeting_apps.config import MujocoWebViewerConfig
-    from retargeting_apps.visualization import mjviser_live
+    from retargeting_apps.visualization.execution import mjviser
     from teleoperation.config import load_mujoco_robot_binding_config
 
     robot_source = "configs/robots/panda_leap_paxini.yaml"
@@ -425,12 +427,12 @@ def test_joint_angle_readouts_cover_all_panda_leap_joints_and_qpos_addresses(mon
         Icon=SimpleNamespace(ADJUSTMENTS="adjustments"),
     )
     monkeypatch.setattr(
-        mjviser_live,
+        mjviser,
         "_load_mjviser_dependencies",
         lambda: (mujoco, fake_viser, _FakeMujocoScene),
     )
 
-    visualizer = mjviser_live.MujocoWebVisualizer(
+    visualizer = mjviser.MujocoWebVisualizer(
         model,
         data,
         MujocoWebViewerConfig(enabled=True, wait_for_client=False),
@@ -472,7 +474,7 @@ def test_mjviser_adapter_stops_server_when_scene_creation_fails(monkeypatch):
     import pytest
 
     from retargeting_apps.config import MujocoWebViewerConfig
-    from retargeting_apps.visualization import mjviser_live
+    from retargeting_apps.visualization.execution import mjviser
 
     class FailingScene:
         """Scene fake whose construction always fails."""
@@ -497,12 +499,12 @@ def test_mjviser_adapter_stops_server_when_scene_creation_fails(monkeypatch):
         Icon=SimpleNamespace(ADJUSTMENTS="adjustments"),
     )
     monkeypatch.setattr(
-        mjviser_live,
+        mjviser,
         "_load_mjviser_dependencies",
         lambda: (_FAKE_MUJOCO, fake_viser, FailingScene),
     )
 
     with pytest.raises(RuntimeError, match="scene failure"):
-        mjviser_live.MujocoWebVisualizer(object(), object(), MujocoWebViewerConfig(enabled=True))
+        mjviser.MujocoWebVisualizer(object(), object(), MujocoWebViewerConfig(enabled=True))
 
     assert _FakeViserServer.instances[0].stop_count == 1

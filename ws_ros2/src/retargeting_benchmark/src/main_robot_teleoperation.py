@@ -78,7 +78,7 @@ class RobotTeleoperationMain:
         self.robot_config = load_robot_config(repo_root / self.profile_config.robot)
         self.method_config = load_retargeting_config(repo_root / self.profile_config.method)
         self.solver_config = load_solver_config(repo_root / "configs/solvers/nlopt_slsqp.yaml")
-        self.mode_config = load_teleoperation_mode_config(repo_root / "configs/teleoperation_modes/simulation.yaml")
+        self.mode_config = load_teleoperation_mode_config(None)
         command_config = load_teleoperation_command_config(profile_source, robot_config=self.robot_config)
         self.max_joint_speed = np.asarray(command_config.max_joint_speed, dtype=float)
         self.avp_ip = "192.168.52.6"

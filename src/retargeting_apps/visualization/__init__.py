@@ -1,3 +1,3 @@
-from retargeting_apps.visualization.base import ReplayVisualizer
+"""Application-owned visualization adapters and viewers."""
 
-__all__ = ["ReplayVisualizer"]
+__all__: list[str] = []

@@ -3,6 +3,7 @@ import time
 from typing import Any, List
 
 import numpy as np
+from mr_utils.utils_mano import MANO_FINGERTIP_INDEX
 from retargeting_apps.offline_retargeting import (
     RetargetReplayFrame,
     RobotReplayContext,
@@ -10,49 +11,18 @@ from retargeting_apps.offline_retargeting import (
     trajectory_to_replay_frames,
 )
 from retargeting_apps.artifacts.trajectory import load_retargeting_trajectory
-from scipy.spatial.transform import Rotation as sciR
-from mr_utils.utils_mano import MANO_FINGERTIP_INDEX, MANO_LINE_PAIRS, MANO_POINTS_COLORS
+from retargeting_apps.visualization.viser_scene import (
+    ViserHandObservationRenderer,
+    configure_initial_camera,
+)
 
 
-HUMAN_COLOR = np.array([40, 180, 255], dtype=np.uint8)
 HUMAN_TRAIL_COLOR = (40, 180, 255)
-
-
-def rotation_matrix_to_wxyz(rot_mat: np.ndarray) -> np.ndarray:
-    xyzw = sciR.from_matrix(rot_mat).as_quat()
-    return xyzw[[3, 0, 1, 2]]
 
 
 def qpos_to_urdf_config(context: RobotReplayContext, urdf, qpos: np.ndarray) -> np.ndarray:
     qpos_by_name = dict(zip(context.actuated_joints_name, qpos))
     return np.asarray([qpos_by_name[name] for name in urdf.get_actuated_joint_names()])
-
-
-def human_line_segments(frame: RetargetReplayFrame) -> np.ndarray:
-    return np.asarray(
-        [[frame.hand_keypoints_world[start], frame.hand_keypoints_world[end]] for start, end in MANO_LINE_PAIRS]
-    )
-
-
-def add_line_segments(scene, name: str, points: np.ndarray, color: tuple[int, int, int], line_width: float):
-    if points.size == 0:
-        return None
-    if hasattr(scene, "add_line_segments"):
-        colors = np.tile(np.asarray(color, dtype=np.uint8), (points.shape[0], 2, 1))
-        return scene.add_line_segments(name, points=points, colors=colors, line_width=line_width)
-
-    handles = []
-    for idx, segment in enumerate(points):
-        if hasattr(scene, "add_spline_catmull_rom"):
-            handles.append(
-                scene.add_spline_catmull_rom(
-                    f"{name}/{idx}",
-                    points=segment,
-                    color=color,
-                    line_width=line_width,
-                )
-            )
-    return handles
 
 
 def remove_handles(handles: List[object]):
@@ -63,24 +33,6 @@ def remove_handles(handles: List[object]):
             remove_handles(handle)
         elif hasattr(handle, "remove"):
             handle.remove()
-
-
-def add_point_cloud(scene, name: str, points: np.ndarray, colors: np.ndarray, point_size: float):
-    if points.size == 0:
-        return None
-    return scene.add_point_cloud(name, points=points, colors=colors, point_size=point_size)
-
-
-def add_frame(scene, name: str, pose: np.ndarray, axes_length: float = 0.06):
-    if not hasattr(scene, "add_frame"):
-        return None
-    return scene.add_frame(
-        name,
-        wxyz=rotation_matrix_to_wxyz(pose[:3, :3]),
-        position=pose[:3, 3],
-        axes_length=axes_length,
-        axes_radius=0.004,
-    )
 
 
 def trajectory_points(frames: List[RetargetReplayFrame], current_idx: int, trail_length: int, getter) -> np.ndarray:
@@ -120,62 +72,6 @@ def add_trails(
     return handles
 
 
-def render_frame(
-    server,
-    frames: List[RetargetReplayFrame],
-    current_idx: int,
-    trail_length: int,
-    human_keypoint_size: float,
-    show_human: bool,
-    show_trails: bool,
-) -> List[object]:
-    scene = server.scene
-    frame = frames[current_idx]
-    handles: List[object] = []
-
-    if show_human:
-        human_colors = np.asarray(MANO_POINTS_COLORS, dtype=np.uint8)
-        handles.append(
-            add_point_cloud(
-                scene,
-                "/current/human/keypoints",
-                frame.hand_keypoints_world,
-                human_colors,
-                human_keypoint_size,
-            )
-        )
-        handles.append(
-            add_line_segments(scene, "/current/human/skeleton", human_line_segments(frame), tuple(HUMAN_COLOR), 2.0)
-        )
-        handles.append(add_frame(scene, "/current/human/wrist", frame.wrist_pose_world))
-
-    if show_trails:
-        handles.append(add_trails(scene, frames, current_idx, trail_length, show_human=show_human))
-
-    return handles
-
-
-def configure_initial_camera(
-    server: Any,
-    position: tuple[float, float, float],
-    look_at: tuple[float, float, float],
-) -> None:
-    """Configure Viser's initial and reset-view camera pose.
-
-    Args:
-        server: Viser server whose initial camera should be configured.
-        position: Three-dimensional camera position in Viser world coordinates.
-        look_at: Three-dimensional point that the camera initially targets.
-
-    Returns:
-        None.
-    """
-    # Viser applies this pose to new clients and uses it for the Reset View action.
-    server.initial_camera.position = position
-    server.initial_camera.look_at = look_at
-
-
-
 def run_replay_viewer(options: dict[str, Any]) -> None:
     """Play one saved retargeting artifact in the Viser viewer.
 
@@ -207,6 +103,10 @@ def run_replay_viewer(options: dict[str, Any]) -> None:
         position=options["initial_camera_position"],
         look_at=options["initial_camera_look_at"],
     )
+    human_renderer = ViserHandObservationRenderer(
+        server,
+        point_size=float(options["human_keypoint_size"]),
+    )
     print(f"Viser server started on port {options['port']}. Loaded {len(frames)} frames.")
 
     robot_urdf = None
@@ -229,7 +129,7 @@ def run_replay_viewer(options: dict[str, Any]) -> None:
     gui_show_trails = server.gui.add_checkbox("Show trails", initial_value=False)
     gui_trail_length = server.gui.add_number("Trail length", initial_value=options["trail_length"])
 
-    handles: List[object] = []
+    trail_handles: List[object] = []
     last_rendered = None
     last_step_time = time.time()
 
@@ -252,15 +152,24 @@ def run_replay_viewer(options: dict[str, Any]) -> None:
                 robot_urdf.show_visual = state[2]
                 if current_frame.qpos is not None:
                     robot_urdf.update_cfg(qpos_to_urdf_config(context, robot_urdf, current_frame.qpos))
-            remove_handles(handles)
-            handles = render_frame(
-                server,
-                frames,
-                current_idx=state[0],
-                trail_length=state[4],
-                human_keypoint_size=float(options["human_keypoint_size"]),
-                show_human=state[1],
-                show_trails=state[3],
+            if state[1]:
+                human_renderer.update_world(
+                    current_frame.hand_keypoints_world,
+                    current_frame.wrist_pose_world,
+                )
+            else:
+                human_renderer.hide()
+            remove_handles(trail_handles)
+            trail_handles = (
+                add_trails(
+                    server.scene,
+                    frames,
+                    current_idx=state[0],
+                    trail_length=state[4],
+                    show_human=state[1],
+                )
+                if state[3]
+                else []
             )
             last_rendered = state
 

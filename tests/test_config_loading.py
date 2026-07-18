@@ -135,21 +135,12 @@ def test_detection_source_configs_load_detector_calibration():
 def test_teleoperation_mode_configs_load_runtime_flags():
     from teleoperation.config import load_teleoperation_mode_config
 
-    simulation_config = load_teleoperation_mode_config("configs/teleoperation_modes/simulation.yaml")
     real_world_config = load_teleoperation_mode_config("configs/teleoperation_modes/real_world.yaml")
-    virtual_hardware_config = load_teleoperation_mode_config("configs/teleoperation_modes/virtual_hardware.yaml")
     offline_mujoco_config = load_teleoperation_mode_config("configs/teleoperation_modes/offline_mujoco.yaml")
 
-    assert simulation_config.name == "simulation"
-    assert simulation_config.robot_control.use_hardware is False
-    assert simulation_config.output.smooth_output_qpos is False
-    assert simulation_config.pipeline.missing_frame_policy == "hold"
     assert real_world_config.robot_control.use_hardware is True
     assert real_world_config.robot_control.use_virtual_hardware is False
     assert real_world_config.output.smooth_output_qpos is True
-    assert virtual_hardware_config.robot_control.use_hardware is True
-    assert virtual_hardware_config.robot_control.use_virtual_hardware is True
-    assert virtual_hardware_config.output.smooth_output_qpos is False
     assert offline_mujoco_config.name == "offline_mujoco"
     assert offline_mujoco_config.pipeline.realtime is False
     assert offline_mujoco_config.pipeline.startup_move_frames == 1
@@ -232,11 +223,14 @@ def test_mujoco_web_viewer_config_loads_and_validates_application_settings():
     Returns:
         None.
     """
-    from retargeting_apps.config import load_mujoco_web_viewer_config
+    from retargeting_apps.config import EXECUTION_VIEWER_TYPES, load_mujoco_web_viewer_config
+
+    assert EXECUTION_VIEWER_TYPES == frozenset({"auto", "mjviser", "viser"})
 
     config = load_mujoco_web_viewer_config(
         {
             "enabled": True,
+            "type": "viser",
             "host": "127.0.0.1",
             "port": 0,
             "wait_for_client": False,
@@ -244,10 +238,14 @@ def test_mujoco_web_viewer_config_loads_and_validates_application_settings():
             "camera_distance": 1.5,
             "camera_azimuth": 90.0,
             "camera_elevation": 30.0,
+            "human_keypoint_size": 0.012,
+            "initial_camera_position": [1.0, 2.0, 3.0],
+            "initial_camera_look_at": [0.1, 0.2, 0.3],
         }
     )
 
     assert config.enabled is True
+    assert config.type == "viser"
     assert config.host == "127.0.0.1"
     assert config.port == 0
     assert config.wait_for_client is False
@@ -255,11 +253,18 @@ def test_mujoco_web_viewer_config_loads_and_validates_application_settings():
     assert config.camera_distance == 1.5
     assert config.camera_azimuth == 90.0
     assert config.camera_elevation == 30.0
+    assert config.human_keypoint_size == 0.012
+    assert config.initial_camera_position == (1.0, 2.0, 3.0)
+    assert config.initial_camera_look_at == (0.1, 0.2, 0.3)
 
     with pytest.raises(ValueError, match="port"):
         load_mujoco_web_viewer_config({"port": 65536})
     with pytest.raises(ValueError, match="camera settings"):
         load_mujoco_web_viewer_config({"camera_distance": float("nan")})
+    with pytest.raises(ValueError, match="viewer.type"):
+        load_mujoco_web_viewer_config({"type": "unknown"})
+    with pytest.raises(ValueError, match="human_keypoint_size"):
+        load_mujoco_web_viewer_config({"human_keypoint_size": 0.0})
 
 
 def test_retargeting_config_accepts_vector_wrist_joint_class():
@@ -308,7 +313,7 @@ def test_offline_retarget_config_accepts_post_action_overrides():
     assert config["post"]["visualize"]["enabled"] is True
     assert config["post"]["visualize"]["viewer"]["port"] == 9321
     assert config["post"]["visualize"]["viewer"]["human_keypoint_size"] == 0.012
-    assert config["teleoperation_mode"]["name"] == "simulation"
+    assert "teleoperation_mode" not in config
 
 
 def test_offline_retarget_post_actions_reuse_standalone_app_defaults():
@@ -403,8 +408,10 @@ def test_base_config_selects_each_whitelisted_app():
     assert teleop_offline_mujoco_config["teleoperation_mode"]["pipeline"]["realtime"] is False
     assert teleop_offline_mujoco_config["teleoperation_mode"]["pipeline"]["startup_move_frames"] == 1
     assert teleop_offline_mujoco_config["viewer"]["enabled"] is False
+    assert teleop_offline_mujoco_config["viewer"]["type"] == "auto"
     assert teleop_offline_mujoco_config["viewer"]["port"] == 9219
     assert teleop_offline_mujoco_config["viewer"]["wait_for_client"] is True
+    assert teleop_offline_mujoco_config["viewer"]["human_keypoint_size"] == 0.005
 
 
 def test_main_dispatcher_rejects_unknown_app_id():

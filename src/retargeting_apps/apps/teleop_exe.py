@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from retargeting_apps.composition import build_execution_flow
-from retargeting_apps.config import load_mujoco_web_viewer_config, to_plain_config_data
-from retargeting_apps.visualization.mjviser_live import (
-    MujocoWebVisualizer,
-    create_mujoco_web_visualizer,
+from retargeting_apps.config import to_plain_config_data
+from retargeting_apps.visualization.execution.manager import (
+    ExecutionVisualizer,
+    create_optional_execution_visualizer,
 )
 from teleoperation.config import load_execution_backend_config
 from teleoperation.types import ExecutionStepResult
@@ -126,32 +126,6 @@ def _validate_runtime_options(config_data: dict[str, Any]) -> None:
         )
 
 
-def _create_optional_mujoco_viewer(config_data: dict[str, Any], flow: Any) -> MujocoWebVisualizer | None:
-    """Create and attach optional passive MuJoCo Web visualization.
-
-    Args:
-        config_data: Plain composed execution app config.
-        flow: Execution flow whose backend may expose MuJoCo model/data.
-
-    Returns:
-        Created visualizer, or None when disabled.
-    """
-    viewer_config = load_mujoco_web_viewer_config(config_data.get("viewer"))
-    if not viewer_config.enabled:
-        return None
-    model = getattr(flow.backend, "model", None)
-    data = getattr(flow.backend, "data", None)
-    if model is None or data is None:
-        raise TypeError("MuJoCo Web visualization requires a MuJoCo backend exposing model and data.")
-    visualizer = create_mujoco_web_visualizer(model, data, viewer_config)
-    visualizer.update()
-    flow.add_command_observer(lambda result: visualizer.update())
-    flow.add_reset_observer(lambda qpos: visualizer.update())
-    if viewer_config.wait_for_client:
-        visualizer.wait_for_client()
-    return visualizer
-
-
 def _add_offline_source_bounds(flow: Any, diagnostics: dict[str, Any]) -> None:
     """Append archived input bounds to summary diagnostics when available.
 
@@ -190,9 +164,9 @@ def run(config: Any, argv: list[str]) -> dict[str, Any]:
     _validate_runtime_options(config_data)
     flow = build_execution_flow(config_data)
     _add_progress_logger(config_data, flow)
-    visualizer: MujocoWebVisualizer | None = None
+    visualizer: ExecutionVisualizer | None = None
     try:
-        visualizer = _create_optional_mujoco_viewer(config_data, flow)
+        visualizer = create_optional_execution_visualizer(config_data, flow)
         summary = flow.run()
         diagnostics = summary.diagnostics
         _add_offline_source_bounds(flow, diagnostics)
