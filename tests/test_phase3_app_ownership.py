@@ -46,8 +46,18 @@ def test_application_modules_have_one_canonical_package_owner():
     for removed_path in ("main.py", "apps", "pipelines", "artifacts", "visualization"):
         assert not (RETARGETING_SRC / removed_path).exists()
 
-    for owned_path in ("main.py", "config.py", "apps", "pipelines", "artifacts", "visualization"):
+    for owned_path in (
+        "main.py",
+        "config.py",
+        "composition.py",
+        "offline_retargeting.py",
+        "benchmark_report.py",
+        "apps",
+        "artifacts",
+        "visualization",
+    ):
         assert (RETARGETING_APPS_SRC / owned_path).exists()
+    assert not (RETARGETING_APPS_SRC / "pipelines").exists()
 
     for removed_module in (
         "retargeting.main",
@@ -94,8 +104,8 @@ def test_app_configs_modules_and_entry_contracts_align():
     config_ids = {path.stem for path in config_dir.glob("*.yaml")}
 
     assert set(APP_MODULES) == app_module_ids == config_ids
-    assert (RETARGETING_APPS_SRC / "pipelines" / "mujoco_runtime_builder.py").is_file()
-    assert not (RETARGETING_APPS_SRC / "mujoco_runtime_builder.py").exists()
+    assert (RETARGETING_APPS_SRC / "composition.py").is_file()
+    assert not (RETARGETING_APPS_SRC / "pipelines").exists()
     assert not (app_dir / "mujoco_runtime_builder.py").exists()
     assert not (app_dir / "viser_retargeting_visualize.py").exists()
 
@@ -203,7 +213,7 @@ def test_import_application_entrypoint_succeeds_without_optional_adapters():
         sys.meta_path.insert(0, BlockOptionalImports())
 
         import retargeting_apps
-        import retargeting_apps.apps.mujoco_offline_simulation
+        import retargeting_apps.apps.teleop_exe
         import retargeting_apps.main
         import retargeting_apps.visualization.mjviser_live
         """

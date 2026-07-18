@@ -1,4 +1,4 @@
-# @package detection_source
+# @package input
 name: avp
 input_device: avp # apple vision pro
 world_to_robot:

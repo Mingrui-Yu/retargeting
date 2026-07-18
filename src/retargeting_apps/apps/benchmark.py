@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from retargeting_apps.pipelines.benchmark_report import run_benchmark_from_config
+from retargeting_apps.benchmark_report import run_benchmark_from_config
 
 
 def run(config: Any, argv: list[str]) -> tuple[Path, Path | None]:

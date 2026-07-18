@@ -1,4 +1,4 @@
-# @package detection_source
+# @package input
 name: rgb
 input_device: rgb
 world_to_robot:

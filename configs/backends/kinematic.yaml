@@ -1,0 +1,3 @@
+# @package backend
+name: kinematic
+command_hz: 20.0

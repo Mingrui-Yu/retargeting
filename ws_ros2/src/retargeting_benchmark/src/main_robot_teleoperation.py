@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-import json
+"""ROS/real-robot compatibility entrypoint using the canonical execution flow."""
+
 import os
-import sys
-import time
 from datetime import datetime
 from pathlib import Path
 from threading import Thread
-from typing import Union
 
 import numpy as np
 import rclpy
@@ -14,299 +12,280 @@ from _retargeting_compat import ensure_retargeting_package
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from robot_adaptor import RobotAdaptor
-from robot_benchmark import RobotBenchmark
 from robot_control import RobotControl
 from robot_pinocchio import RobotPinocchio
-from robot_real import RobotReal
-from teleoperation.config import (
-    load_detection_source_config,
-    load_teleoperation_command_config,
-    load_teleoperation_mode_config,
-)
-from teleoperation.inputs.offline_avp import load_offline_avp_trajectory
-from teleoperation.avp_alignment import initialize_avp_alignment
-from teleoperation.session import TeleoperationSession
 from rviz_visualize import RvizVisualizer
 from utils.utils_keyboard import KeyboardListener
 
 ensure_retargeting_package()
+
 from retargeting.config import (
     load_retargeting_config,
     load_retargeting_profile_config,
     load_robot_config,
     load_solver_config,
 )
+from retargeting.core import Retargeter
+from retargeting.evaluation.robot_metrics import RobotBenchmark
+from retargeting_ros.backends import RosCommandBackend
+from teleoperation.config import (
+    load_detection_source_config,
+    load_teleoperation_command_config,
+    load_teleoperation_mode_config,
+)
+from teleoperation.flow import ExecutionFlow
+from teleoperation.inputs.avp import AvpOfflineInput, AvpOnlineInput
+from teleoperation.observation_mapping import AvpRelativeWristMapper
+from teleoperation.output import QposCommandLimiter, QposOutputFilter
+from teleoperation.types import ExecutionStepResult
 
 
-def flatten_stream_data(data_dict):
+def flatten_stream_data(data_dict: dict) -> dict:
+    """Flatten recorded raw stream mappings into NPZ-compatible arrays.
+
+    Args:
+        data_dict: Recording mapping containing a list under ``stream``.
+
+    Returns:
+        Mapping with each stream field promoted to a ``stream_*`` array.
     """
-    Extract the elements in 'stream' dict to the overall dictp
-    """
-    new_data_dict = {}
-    for step, stream in enumerate(data_dict["stream"]):
+    flattened: dict = {}
+    for stream in data_dict["stream"]:
         for key, value in stream.items():
-            new_key = f"stream_{key}"
-            if new_key not in new_data_dict:
-                new_data_dict[new_key] = []
-            new_data_dict[new_key].append(value)
-
+            flattened.setdefault(f"stream_{key}", []).append(value)
     for key, value in data_dict.items():
         if key != "stream":
-            new_data_dict[key] = value
-
-    return new_data_dict
+            flattened[key] = value
+    return flattened
 
 
 class RobotTeleoperationMain:
-    def __init__(self):
-        # --------- hyper-parameters ---------
+    """Compose ROS acquisition, canonical execution flow, and passive recording."""
+
+    def __init__(self) -> None:
+        """Construct robot, retargeting, ROS, and command-policy components.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         repo_root = Path(__file__).resolve().parents[4]
         profile_source = repo_root / "configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"
-        profile_config = load_retargeting_profile_config(profile_source)
-        detection_source_config = load_detection_source_config(repo_root / "configs/detection_sources/avp.yaml")
-        robot_config = load_robot_config(repo_root / profile_config.robot)
-        self.robot_config = robot_config
-        retargeting_config = load_retargeting_config(repo_root / profile_config.method)
-        solver_config = load_solver_config(repo_root / "configs/solvers/nlopt_slsqp.yaml")
-        teleoperation_mode_config = load_teleoperation_mode_config(
-            repo_root / "configs/teleoperation_modes/simulation.yaml"
-        )
-        urdf_file_name = robot_config.robot_file_path
-        actuated_joints_name = list(robot_config.actuated_joints)
-        command_config = load_teleoperation_command_config(profile_source, robot_config=robot_config)
-        self.max_joint_speed = list(command_config.max_joint_speed)
-
+        self.profile_config = load_retargeting_profile_config(profile_source)
+        self.detection_config = load_detection_source_config(repo_root / "configs/detection_sources/avp.yaml")
+        self.robot_config = load_robot_config(repo_root / self.profile_config.robot)
+        self.method_config = load_retargeting_config(repo_root / self.profile_config.method)
+        self.solver_config = load_solver_config(repo_root / "configs/solvers/nlopt_slsqp.yaml")
+        self.mode_config = load_teleoperation_mode_config(repo_root / "configs/teleoperation_modes/simulation.yaml")
+        command_config = load_teleoperation_command_config(profile_source, robot_config=self.robot_config)
+        self.max_joint_speed = np.asarray(command_config.max_joint_speed, dtype=float)
         self.avp_ip = "192.168.52.6"
-        # self.avp_ip = "192.168.60.250"
-        self.input_device = detection_source_config.input_device
         self.load_offline_data = True
-        self.use_hardware = teleoperation_mode_config.robot_control.use_hardware
-        self.use_virtual_hardware = teleoperation_mode_config.robot_control.use_virtual_hardware
-        self.use_high_freq_interp = teleoperation_mode_config.robot_control.use_high_freq_interp
-        self.use_ros = True
+        self.use_hardware = self.mode_config.robot_control.use_hardware
+        self.use_virtual_hardware = self.mode_config.robot_control.use_virtual_hardware
+        self.use_high_freq_interp = self.mode_config.robot_control.use_high_freq_interp
 
-        if self.use_ros:
-            rclpy.init(args=None)
-            self.node = Node("main_node")
-            self.executor = MultiThreadedExecutor()
-            self.executor.add_node(self.node)
-            self.spin_thread = Thread(target=self.executor.spin, daemon=True)
-            self.spin_thread.start()
-            self.rviz_visualizer = RvizVisualizer(node=self.node)
-        else:
-            self.node = None
-
+        rclpy.init(args=None)
+        self.node = Node("main_node")
+        self.executor = MultiThreadedExecutor()
+        self.executor.add_node(self.node)
+        self.spin_thread = Thread(target=self.executor.spin, daemon=True)
+        self.spin_thread.start()
+        self.rviz_visualizer = RvizVisualizer(node=self.node)
         self.robot_model = RobotPinocchio(
-            robot_file_path=urdf_file_name,
-            robot_file_type="urdf",
+            robot_file_path=self.robot_config.robot_file_path,
+            robot_file_type=self.robot_config.model.type,
         )
         self.robot_adaptor = RobotAdaptor(
             robot_model=self.robot_model,
-            actuated_joints_name=actuated_joints_name,
+            actuated_joints_name=list(self.robot_config.actuated_joints),
         )
         self.robot_control = RobotControl(
             self.robot_model,
             self.robot_adaptor,
-            initial_qpos=np.asarray(robot_config.initial_qpos, dtype=float),
-            arm_dof=profile_config.retargeting.arm_dof,
+            initial_qpos=np.asarray(self.robot_config.initial_qpos, dtype=float),
+            arm_dof=self.profile_config.retargeting.arm_dof,
             use_hardware=self.use_hardware,
             use_virtual_hardware=self.use_virtual_hardware,
             use_high_freq_interp=self.use_high_freq_interp,
             node=self.node,
         )
-        self.robot_teleop = TeleoperationSession(
-            robot_adaptor=self.robot_adaptor,
-            robot_config=robot_config,
-            profile_config=profile_config,
-            method_config=retargeting_config,
-            detection_source_config=detection_source_config,
-            teleoperation_mode_config=teleoperation_mode_config,
-            solver_config=solver_config,
-        )
-        # self.robot_benchmark = RobotBenchmark(robot_adaptor=self.robot_adaptor)
-        if self.input_device == "avp":
-            if not self.load_offline_data:
-                self.robot_teleop.detector.connect(avp_ip=self.avp_ip)
-        else:
-            raise NotImplementedError()
-
-        # check the retargeting type
-        print(retargeting_config.type)
-
-        # for keyboard control
         self.keyboard_listener = KeyboardListener()
         self.keyboard_listener.start_keyboard_listening_thread()
-        # for recording data
-        self.data = {}
-        self.data["stream"] = []
-        self.data["retarget_qpos"] = []
+        self.data = {"stream": [], "retarget_qpos": []}
+        self.metric_history: dict[str, list[float]] = {
+            "position_err": [],
+            "orientation_err": [],
+            "relative_position_err": [],
+            "relative_position_to_wrist_err": [],
+            "optimization_time": [],
+        }
 
-    def save_data(self, save_dir):
-        file = os.path.join(save_dir, "data.npz")
-        data = flatten_stream_data(self.data)
-        np.savez(file, **data)
-        print(f"Save stream data to {file}.")
+    def save_data(self, save_dir: str) -> None:
+        """Persist recorded raw streams and retargeted qpos arrays.
 
-    def load_data(self, file_name):
-        trajectory = load_offline_avp_trajectory(file_name)
-        return {"stream": [trajectory.get_frame(frame_idx) for frame_idx in range(trajectory.n_frames)]}
+        Args:
+            save_dir: Existing output directory.
 
-    def main(self):
-        # ----------- hyper-parameters -----------
+        Returns:
+            None.
+        """
+        file_name = os.path.join(save_dir, "data.npz")
+        np.savez(file_name, **flatten_stream_data(self.data))
+        print(f"Save stream data to {file_name}.")
+
+    def _build_flow(self, data_file: str | None) -> ExecutionFlow:
+        """Construct one complete offline or online AVP execution flow.
+
+        Args:
+            data_file: Offline NPZ path, or None for live acquisition.
+
+        Returns:
+            Canonical execution flow using the ROS robot-control backend.
+        """
+        retargeter = Retargeter(
+            self.robot_adaptor,
+            self.robot_config,
+            self.profile_config,
+            self.method_config,
+            self.solver_config,
+        )
+        output_filter = QposOutputFilter(retargeter.qpos_init, self.mode_config)
+        mapper = AvpRelativeWristMapper(
+            self.detection_config,
+            self.robot_config.human_hand_scale,
+            self.robot_adaptor,
+            self.robot_model,
+            self.robot_config.wrist_frame_name,
+        )
+        evaluator = RobotBenchmark(self.robot_adaptor, self.robot_config.benchmark)
+
+        def execute_robot(qpos: np.ndarray) -> np.ndarray:
+            """Execute one complete RobotControl command period.
+
+            Args:
+                qpos: Requested actuated-joint target.
+
+            Returns:
+                Measured robot state after the period.
+            """
+            self.robot_control.ctrl_joint_pos(qpos)
+            self.robot_control.step()
+            return self.robot_control.get_joint_pos(update=True)
+
+        def reset_robot(qpos: np.ndarray) -> np.ndarray:
+            """Move RobotControl to a synchronized flow reset target.
+
+            Args:
+                qpos: Requested reset target.
+
+            Returns:
+                Measured robot state after the reset move.
+            """
+            self.robot_control.move_to_joint_pos(qpos, max_joint_speed=self.max_joint_speed)
+            return self.robot_control.get_joint_pos(update=True)
+
+        backend = RosCommandBackend(
+            initial_qpos=self.robot_config.initial_qpos,
+            control_period=float(self.robot_control.env.timestep),
+            execute_callback=execute_robot,
+            reset_callback=reset_robot,
+        )
+        joint_limits = self.robot_adaptor.backward_qpos(self.robot_model.joint_limits)
+        command_policy = QposCommandLimiter(
+            initial_qpos=backend.get_target_joint_pos(),
+            max_joint_speed=self.max_joint_speed,
+            command_hz=1.0 / backend.control_period,
+            lower=joint_limits[:, 0],
+            upper=joint_limits[:, 1],
+        )
+        hand_input = AvpOnlineInput(self.avp_ip) if data_file is None else AvpOfflineInput(data_file)
+        flow = ExecutionFlow(
+            input=hand_input,
+            observation_mapper=mapper,
+            retargeter=retargeter,
+            output_filter=output_filter,
+            evaluator=evaluator,
+            command_policy=command_policy,
+            backend=backend,
+            realtime=False,
+            startup_move_frames=10 if self.use_hardware else 0,
+        )
+        flow.add_step_observer(self._observe_step)
+        return flow
+
+    def _observe_step(self, result: ExecutionStepResult) -> None:
+        """Record and visualize a completed canonical execution result.
+
+        Args:
+            result: Immutable source-frame result from the flow.
+
+        Returns:
+            None.
+        """
+        frame = result.retargeted_frame
+        if frame is None:
+            return
+        observation = frame.observation
+        self.rviz_visualizer.publish_hand_detection_results(
+            observation.keypoints_wrist,
+            observation.wrist_pose_world,
+            frame_id="visualize/world",
+        )
+        qpos_dof = self.robot_adaptor.forward_qpos(frame.retargeted_qpos)
+        self.rviz_visualizer.publish_robot_joint_states(self.robot_model.joint_names, qpos_dof)
+        self.data["stream"].append(observation.raw)
+        self.data["retarget_qpos"].append(np.asarray(frame.retargeted_qpos, dtype=float).copy())
+        for key in self.metric_history:
+            if key in frame.diagnostics:
+                self.metric_history[key].append(float(frame.diagnostics[key]))
+        if "p" in self.keyboard_listener.pressed_keys:
+            raise KeyboardInterrupt
+
+    def main(self) -> None:
+        """Run the configured acquisition flow and persist compatibility outputs.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         project_dir = "/home/mingrui/mingrui/research/retargeting"
         save_dir = os.path.join(project_dir, f"outputs/teleop/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}")
         os.makedirs(save_dir, exist_ok=True)
-        if self.load_offline_data:
-            file_name = os.path.join(project_dir, "data/test_teleop/avp/data_2025-01-16_20-27-43.npz")
-            data_dict = self.load_data(file_name)
-            stream_data = data_dict["stream"]
-
-        i = 0
-        total_position_err = 0
-        total_orientation_err = 0
-        total_relative_position_err = 0
-        total_relative_position_to_wrist_err = 0
-        total_time_cost = 0
-
-        position_err_list = []
-        orientation_err_list = []
-        relative_position_err_list = []
-        relative_position_to_wrist_err_list = []
-        time_cost_list = []
-
-        # move to initial configuration
-        self.robot_control.move_to_joint_pos(self.robot_control.init_joint_pos, max_joint_speed=self.max_joint_speed)
-
+        data_file = (
+            os.path.join(project_dir, "data/test_teleop/avp/data_2025-01-16_20-27-43.npz")
+            if self.load_offline_data
+            else None
+        )
+        flow = self._build_flow(data_file)
+        flow.reset(np.asarray(self.robot_config.initial_qpos, dtype=float))
         if self.use_hardware and not self.use_virtual_hardware:
             self.robot_control.env.start_record_video(data_dir=save_dir)
-
-        # i_start = 217
-        # i_end = 250
-        i_start = 0
-        i_end = len(stream_data) - 1
-        while True:
-            t_frame_start = time.time()
-            print(f"Frame {i}:")
-
-            if self.load_offline_data:
-                if i > i_end:
-                    break
-                if i < i_start:
-                    i += 1
-                    continue
-
-            # -------- get human motion --------
-            if self.load_offline_data:
-                r = stream_data[i]
-                # print("right_wrist: ", r["right_wrist"])
-            else:
-                r = self.robot_teleop.detector.get_raw_stream()
-
-            # print(f"Frame time cost 1: {(time.time() - t_frame_start):.3f}")
-
-            # -------- retargeting --------
-            if i == i_start:  # set initial poses
-                init_joint_pos = self.robot_control.get_joint_pos(update=True)
-                if not initialize_avp_alignment(self.robot_teleop, r, init_joint_pos):
-                    raise ValueError(f"Unable to initialize AVP alignment from frame {i}.")
-
-            observation, qpos, err = self.robot_teleop.retarget_input(r)
-            if observation is None:
-                i += 1
-                continue
-            hand_kps_in_wrist = observation.keypoints_wrist
-            wrist_pose = observation.wrist_pose_world
-
-            # print(f"Frame time cost 2: {(time.time() - t_frame_start):.3f}")
-
-            # -------- control robot --------
-            if self.use_hardware and i < i_start + 10:
-                self.robot_control.move_to_joint_pos(qpos, max_joint_speed=self.max_joint_speed)
-                print("Slowly move to the first 10 retargeted configuration.")
-            else:
-                self.robot_control.ctrl_joint_pos(qpos)
-
-            self.robot_control.step()
-
-            position_err_list.append(err["position_err"])
-            orientation_err_list.append(err["orientation_err"])
-            relative_position_err_list.append(err["relative_position_err"])
-            relative_position_to_wrist_err_list.append(err["relative_position_to_wrist_err"])
-            time_cost_list.append(err["optimization_time"])
-
-            total_position_err += err["position_err"]
-            total_orientation_err += err["orientation_err"]
-            total_relative_position_err += err["relative_position_err"]
-            total_relative_position_to_wrist_err += err["relative_position_to_wrist_err"]
-            total_time_cost += err["optimization_time"]
-
-            # print(f"Frame time cost 3: {(time.time() - t_frame_start):.3f}")
-
-            # -------- visualization --------
-            if hand_kps_in_wrist is not None:
-                # visualize the human hand in rviz
-                self.rviz_visualizer.publish_hand_detection_results(
-                    hand_kps_in_wrist, wrist_pose, frame_id="visualize/world"
-                )
-                # visualize the robot hand in rviz
-                joints_name = self.robot_model.joint_names
-                qpos_dof = self.robot_adaptor.forward_qpos(qpos)
-                self.rviz_visualizer.publish_robot_joint_states(joints_name=joints_name, joints_pos=qpos_dof)
-
-            # print(f"Frame time cost 4: {(time.time() - t_frame_start):.3f}")
-
-            # -------- record data --------
-            self.data["stream"].append(r)
-            self.data["retarget_qpos"].append(qpos)
-
-            t_frame_end = time.time()
-            print(f"Frame total time cost: {(t_frame_end - t_frame_start):.3f}")
-            i += 1
-
-            # quit loop criterian
-            if "p" in self.keyboard_listener.pressed_keys:
-                self.save_data(save_dir)
-                if self.use_hardware and not self.use_virtual_hardware:
-                    self.robot_control.env.stop_record_video()
-                break
-
-            # return to the initial configuration and re-start
-            if self.load_offline_data:
-                if i >= len(stream_data):
-                    # i = 0
-                    # self.robot_control.move_to_joint_pos(
-                    #     self.robot_control.init_joint_pos, max_joint_speed=self.max_joint_speed
-                    # )
-                    self.save_data(save_dir)
-                    if self.use_hardware and not self.use_virtual_hardware:
-                        self.robot_control.env.stop_record_video()
-                    break
-        # --------------------------------- end loop ---------------------------------
-
-        # save quantitative results
+        summary = flow.run()
+        self.save_data(save_dir)
+        if self.use_hardware and not self.use_virtual_hardware:
+            self.robot_control.env.stop_record_video()
         if self.load_offline_data:
-            print("---------------------------------------")
-            print("average_position_err: ", total_position_err / len(stream_data))
-            print("average_orientation_err: ", total_orientation_err / len(stream_data))
-            print("average_relative_position_err: ", total_relative_position_err / len(stream_data))
-            print("average_relative_position_to_wrist_err: ", total_relative_position_to_wrist_err / len(stream_data))
-            print("average_time_cost: ", total_time_cost / len(stream_data))
-            output_file = f"outputs/simulation/{self.robot_config.name}/complex_8.npz"
-            os.makedirs(os.path.dirname(output_file), exist_ok=True)
-            np.savez(
-                output_file,
-                position_err=np.array(position_err_list),
-                orientation_err=np.array(orientation_err_list),
-                relative_position_err=np.array(relative_position_err_list),
-                relative_position_to_wrist_err=np.array(relative_position_to_wrist_err_list),
-                time_cost=np.array(time_cost_list),
-            )
-            print(f"Saved quantitative results to {output_file}")
+            print(f"Processed {summary.retarget_frames_processed} valid retargeted frames.")
+            for key, values in self.metric_history.items():
+                if values:
+                    print(f"average_{key}: {float(np.mean(values))}")
 
 
-def main():
-    teleoperation = RobotTeleoperationMain()
-    teleoperation.main()
+def main() -> None:
+    """Construct and run the ROS compatibility application.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    RobotTeleoperationMain().main()
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from typing import Protocol
 
 import numpy as np
 
-from retargeting.core.types import HandObservation, RetargetingResult
+from retargeting.core.types import RetargetingHandObservation, RetargetingResult
 
 
 class ObservationRetargeter(Protocol):
@@ -15,7 +15,7 @@ class ObservationRetargeter(Protocol):
 
     def solve(
         self,
-        observation: HandObservation,
+        observation: RetargetingHandObservation,
         previous_qpos: np.ndarray | None = None,
     ) -> RetargetingResult:
         """Solve one canonical observation.
@@ -31,7 +31,7 @@ class ObservationRetargeter(Protocol):
 
 
 def retarget_observation_sequence(
-    observations: Iterable[HandObservation],
+    observations: Iterable[RetargetingHandObservation],
     retargeter: ObservationRetargeter,
     previous_qpos: np.ndarray | None = None,
 ) -> tuple[RetargetingResult, ...]:

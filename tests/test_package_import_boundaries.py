@@ -27,7 +27,13 @@ REMOVED_MODULE_PREFIXES = (
     "retargeting.main",
     "retargeting.pipelines",
     "retargeting.visualization",
+    "retargeting_apps.pipelines",
+    "teleoperation.avp_alignment",
     "teleoperation.input",
+    "teleoperation.inputs.adapter",
+    "teleoperation.inputs.offline_avp",
+    "teleoperation.mujoco_runtime",
+    "teleoperation.session",
 )
 
 ROS_IMPORT_ROOTS = frozenset(
@@ -248,15 +254,15 @@ def test_transitional_symbols_and_duplicate_config_loaders_are_removed():
     Returns:
         None.
     """
-    from retargeting.core.types import HandObservation
-    from teleoperation.inputs import offline_avp
+    from retargeting.core.types import RetargetingHandObservation
+    from teleoperation.inputs.avp import offline
 
-    assert not hasattr(HandObservation, "hand_kps_in_wrist")
-    assert not hasattr(HandObservation, "wrist_pose_in_world")
-    assert not hasattr(offline_avp, "OfflineReplay")
-    assert not hasattr(offline_avp, "load_offline_replay")
-    assert not hasattr(offline_avp, "OfflineHumanTrajectory")
-    assert not hasattr(offline_avp, "load_offline_human_trajectory")
+    assert not hasattr(RetargetingHandObservation, "hand_kps_in_wrist")
+    assert not hasattr(RetargetingHandObservation, "wrist_pose_in_world")
+    assert not hasattr(offline, "OfflineReplay")
+    assert not hasattr(offline, "load_offline_replay")
+    assert not hasattr(offline, "OfflineAvpTrajectory")
+    assert not hasattr(offline, "load_offline_avp_trajectory")
 
     config_sources = [
         REPO_ROOT / "src" / "retargeting" / "config" / "io.py",

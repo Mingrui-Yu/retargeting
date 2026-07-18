@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
-
 import numpy as np
 
-from retargeting.core.types import HandObservation, RetargetingResult
+from retargeting.core.types import RetargetingHandObservation, RetargetingResult
+from teleoperation.types import SensorHandSample
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _observation(qpos: tuple[float, float]) -> HandObservation:
+def _observation(qpos: tuple[float, float]) -> RetargetingHandObservation:
     """Build a canonical observation carrying a compact fake target.
 
     Args:
@@ -22,7 +21,7 @@ def _observation(qpos: tuple[float, float]) -> HandObservation:
     """
     keypoints = np.zeros((21, 3))
     keypoints[0, :2] = qpos
-    return HandObservation(keypoints_wrist=keypoints, wrist_pose_world=np.eye(4))
+    return RetargetingHandObservation(keypoints_wrist=keypoints, wrist_pose_world=np.eye(4))
 
 
 class _FakeRetargeter:
@@ -41,7 +40,7 @@ class _FakeRetargeter:
 
     def solve(
         self,
-        observation: HandObservation,
+        observation: RetargetingHandObservation,
         previous_qpos: np.ndarray | None = None,
     ) -> RetargetingResult:
         """Return the target encoded in one canonical observation.
@@ -56,6 +55,100 @@ class _FakeRetargeter:
         self.previous_references.append(None if previous_qpos is None else previous_qpos.copy())
         qpos = observation.keypoints_wrist[0, :2].copy()
         return RetargetingResult(qpos=qpos, diagnostics={"target_norm": float(np.linalg.norm(qpos))})
+
+    def reset(self, previous_qpos: np.ndarray | None = None) -> None:
+        """Accept batch reset state for protocol completeness.
+
+        Args:
+            previous_qpos: Optional reset reference.
+
+        Returns:
+            None.
+        """
+        del previous_qpos
+
+
+class _FiniteBatchInput:
+    """Finite sensor input for batch skip and lifecycle tests."""
+
+    def __init__(self, samples: list[SensorHandSample]) -> None:
+        """Store selected samples and initialize lifecycle state.
+
+        Args:
+            samples: Samples returned before finite end-of-stream.
+
+        Returns:
+            None.
+        """
+        self.samples = samples
+        self.cursor = 0
+        self.closed = False
+
+    def open(self) -> None:
+        """Open the source at its first selected sample.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        self.cursor = 0
+        self.closed = False
+
+    def read(self) -> SensorHandSample | None:
+        """Read one selected sample or finite end-of-stream.
+
+        Args:
+            None.
+
+        Returns:
+            Next sample, or None at source end.
+        """
+        if self.cursor >= len(self.samples):
+            return None
+        sample = self.samples[self.cursor]
+        self.cursor += 1
+        return sample
+
+    def reset(self) -> None:
+        """Rewind the selected sample list.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        self.cursor = 0
+
+    def close(self) -> None:
+        """Record batch source closure.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        self.closed = True
+
+
+def _sensor_sample(qpos: tuple[float, float] | None, source_index: int) -> SensorHandSample:
+    """Build a complete or missing batch sensor sample.
+
+    Args:
+        qpos: Target encoded in keypoints, or None for missing hand data.
+        source_index: Source frame metadata.
+
+    Returns:
+        Sensor-normalized test sample.
+    """
+    if qpos is None:
+        return SensorHandSample(None, None, raw=None, source_index=source_index)
+    keypoints = np.zeros((21, 3))
+    keypoints[0, :2] = qpos
+    return SensorHandSample(keypoints, np.eye(4), raw={}, source_index=source_index)
 
 
 def test_core_retargets_canonical_sequence_with_explicit_temporal_state():
@@ -81,6 +174,58 @@ def test_core_retargets_canonical_sequence_with_explicit_temporal_state():
     np.testing.assert_allclose(results[0].qpos, [1.0, -1.0])
     np.testing.assert_allclose(results[1].qpos, [0.25, 0.5])
     assert results[1].diagnostics["target_norm"] == np.linalg.norm([0.25, 0.5])
+
+
+def test_batch_flow_skips_missing_frames_without_execution_results():
+    """Batch output contains valid retargeting records and no hold placeholders."""
+    from teleoperation.config import load_teleoperation_mode_config
+    from teleoperation.flow import BatchRetargetFlow
+    from teleoperation.observation_mapping import IdentityHandObservationMapper
+    from teleoperation.output import QposOutputFilter
+    from teleoperation.types import RetargetedFrameResult
+
+    hand_input = _FiniteBatchInput(
+        [_sensor_sample((0.1, -0.1), 0), _sensor_sample(None, 1), _sensor_sample((0.2, -0.2), 2)]
+    )
+    retargeter = _FakeRetargeter()
+    output_filter = QposOutputFilter(np.zeros(2), load_teleoperation_mode_config(None))
+    flow = BatchRetargetFlow(
+        input=hand_input,
+        observation_mapper=IdentityHandObservationMapper(),
+        retargeter=retargeter,
+        output_filter=output_filter,
+        initial_robot_qpos=np.zeros(2),
+    )
+
+    records = flow.run()
+
+    assert all(isinstance(record, RetargetedFrameResult) for record in records)
+    assert [record.source_index for record in records] == [0, 2]
+    assert hand_input.closed is True
+
+
+def test_batch_flow_reports_first_frame_mapping_failure_and_closes_input():
+    """Batch mapping initialization failure is explicit and still closes input."""
+    import pytest
+
+    from teleoperation.config import load_teleoperation_mode_config
+    from teleoperation.flow import BatchRetargetFlow
+    from teleoperation.observation_mapping import IdentityHandObservationMapper
+    from teleoperation.output import QposOutputFilter
+
+    hand_input = _FiniteBatchInput([_sensor_sample(None, 4)])
+    flow = BatchRetargetFlow(
+        input=hand_input,
+        observation_mapper=IdentityHandObservationMapper(),
+        retargeter=_FakeRetargeter(),
+        output_filter=QposOutputFilter(np.zeros(2), load_teleoperation_mode_config(None)),
+        initial_robot_qpos=np.zeros(2),
+    )
+
+    with pytest.raises(ValueError, match="source frame 4"):
+        flow.run()
+
+    assert hand_input.closed is True
 
 
 class _FakeRobotAdaptor:
@@ -117,60 +262,6 @@ class _FakeRobotModel:
         return pose
 
 
-class _FakeOfflineSession:
-    """Minimal session exposing AVP alignment boundaries."""
-
-    def __init__(self) -> None:
-        """Initialize fake robot and frame result state.
-
-        Args:
-            None.
-
-        Returns:
-            None.
-        """
-        self.robot_adaptor = _FakeRobotAdaptor()
-        self.robot_model = _FakeRobotModel()
-        self.robot_config = SimpleNamespace(wrist_frame_name="wrist")
-        self.robot_initial_wrist_pose = None
-        self.detection_initial_wrist_pose = None
-
-    def set_robot_init_wrist_pose(self, pose: np.ndarray) -> None:
-        """Record the robot alignment origin.
-
-        Args:
-            pose: Initial robot wrist pose.
-
-        Returns:
-            None.
-        """
-        self.robot_initial_wrist_pose = pose.copy()
-
-    def set_detection_source_init_wrist_pose(self, pose: np.ndarray) -> None:
-        """Record the calibrated detector alignment origin.
-
-        Args:
-            pose: Initial detector wrist pose in robot world coordinates.
-
-        Returns:
-            None.
-        """
-        self.detection_initial_wrist_pose = pose.copy()
-
-    def pose_from_detection_world_to_robot_world(self, pose: np.ndarray) -> np.ndarray:
-        """Apply a deterministic fake detector calibration.
-
-        Args:
-            pose: Wrist pose in detector world coordinates.
-
-        Returns:
-            Wrist pose translated into fake robot world coordinates.
-        """
-        result = pose.copy()
-        result[2, 3] += 0.5
-        return result
-
-
 def _raw_avp_frame() -> dict[str, np.ndarray]:
     """Build a valid raw AVP frame for alignment parsing.
 
@@ -186,8 +277,8 @@ def _raw_avp_frame() -> dict[str, np.ndarray]:
     }
 
 
-def test_avp_alignment_uses_the_selected_robot_pose():
-    """Verify the shared helper aligns a session without an offline wrapper.
+def test_avp_mapper_alignment_uses_the_selected_robot_pose():
+    """Verify AVP mapping initializes without a session or backend dependency.
 
     Args:
         None.
@@ -195,17 +286,23 @@ def test_avp_alignment_uses_the_selected_robot_pose():
     Returns:
         None.
     """
-    from teleoperation.avp_alignment import initialize_avp_alignment
+    from teleoperation.config import DetectionSourceConfig
+    from teleoperation.inputs.avp import decode_avp_sample
+    from teleoperation.observation_mapping import AvpRelativeWristMapper
 
-    session = _FakeOfflineSession()
+    config = DetectionSourceConfig(
+        name="avp",
+        input_device="avp",
+        rotation_euler_xyz_deg=(0.0, 0.0, 0.0),
+        translation=(0.0, 0.0, 0.5),
+        use_relative_wrist_alignment=True,
+    )
+    mapper = AvpRelativeWristMapper(config, 1.0, _FakeRobotAdaptor(), _FakeRobotModel(), "wrist")
+    sample = decode_avp_sample(_raw_avp_frame())
 
-    assert initialize_avp_alignment(
-        session,
-        _raw_avp_frame(),
-        np.array([0.2, -0.3]),
-    ) is True
-    np.testing.assert_allclose(session.robot_initial_wrist_pose[:2, 3], [0.2, -0.3])
-    assert session.detection_initial_wrist_pose[2, 3] == 0.5
+    assert mapper.initialize(sample, np.array([0.2, -0.3])) is True
+    np.testing.assert_allclose(mapper._robot_initial_wrist_pose[:2, 3], [0.2, -0.3])
+    assert mapper._sensor_initial_wrist_pose[2, 3] == 0.5
 
 
 def test_phase4_source_ownership_separates_core_runtime_and_app_orchestration():
@@ -218,10 +315,12 @@ def test_phase4_source_ownership_separates_core_runtime_and_app_orchestration():
         None.
     """
     core_source = (REPO_ROOT / "src" / "retargeting" / "core" / "sequence.py").read_text(encoding="utf-8")
-    alignment_source = (REPO_ROOT / "src" / "teleoperation" / "avp_alignment.py").read_text(encoding="utf-8")
-    app_source = (
-        REPO_ROOT / "src" / "retargeting_apps" / "pipelines" / "offline_retargeting.py"
-    ).read_text(encoding="utf-8")
+    mapper_source = (REPO_ROOT / "src" / "teleoperation" / "observation_mapping.py").read_text(encoding="utf-8")
+    flow_source = (REPO_ROOT / "src" / "teleoperation" / "flow.py").read_text(encoding="utf-8")
+    batch_source = flow_source.split("class BatchRetargetFlow:", maxsplit=1)[1].split(
+        "class ExecutionFlow:", maxsplit=1
+    )[0]
+    app_source = (REPO_ROOT / "src" / "retargeting_apps" / "offline_retargeting.py").read_text(encoding="utf-8")
 
     for forbidden_token in (
         "np.load",
@@ -233,24 +332,19 @@ def test_phase4_source_ownership_separates_core_runtime_and_app_orchestration():
     ):
         assert forbidden_token not in core_source
 
-    assert "parse_avp_stream_frame" in alignment_source
-    assert "TeleoperationSession" in alignment_source
-    assert alignment_source.count("def initialize_avp_alignment(") == 1
-    assert "initialize_avp_session_alignment" not in alignment_source
-    assert "initialize_avp_runtime_alignment" not in alignment_source
-    assert "OfflineRetargetingService" not in alignment_source
-    assert "OfflineRetargetedFrame" not in alignment_source
-    assert "OfflineRetargetingService" not in app_source
-    assert "initialize_avp_alignment" in app_source
-    assert "TeleoperationSession" in app_source
-    assert "session.retarget_input" in app_source
-    assert "if observation is None or qpos is None or diagnostics is None:" in app_source
-    assert "load_offline_avp_trajectory" in app_source
-    assert "tqdm" in app_source
+    assert "class AvpRelativeWristMapper" in mapper_source
+    assert "TeleoperationSession" not in mapper_source
+    assert "class BatchRetargetFlow" in flow_source
+    assert "RobotBackend" not in batch_source
+    assert "ExecutionStepResult" not in batch_source
+    assert "build_batch_retarget_flow" in app_source
+    assert "TeleoperationSession" not in app_source
+    assert "session.retarget_input" not in app_source
+    assert "retargeted_qpos" in app_source
     for moved_runtime_concern in (
-        "parse_avp_stream_frame",
+        "decode_avp_sample",
         "Retargeter",
         "QposOutputFilter",
-        "load_offline_replay",
+        "RobotBackend",
     ):
         assert moved_runtime_concern not in app_source

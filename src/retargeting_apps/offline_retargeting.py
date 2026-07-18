@@ -19,10 +19,10 @@ from retargeting.config import (
     load_solver_config,
 )
 from retargeting_apps.config import to_plain_config_data
+from retargeting_apps.composition import build_batch_retarget_flow
 from retargeting_apps.artifacts.trajectory import RetargetingRunMetadata, RetargetingTrajectory
 from retargeting.core.kinematics.adaptor import RobotAdaptor
 from retargeting.core.kinematics.pinocchio_model import RobotPinocchio
-from tqdm.auto import tqdm
 from mr_utils.utils_calc import transformPositions
 from teleoperation.config import (
     DetectionSourceConfig,
@@ -30,13 +30,10 @@ from teleoperation.config import (
     load_detection_source_config,
     load_teleoperation_mode_config,
 )
-from teleoperation.inputs.offline_avp import iter_frame_indices, load_offline_avp_trajectory
-from teleoperation.avp_alignment import initialize_avp_alignment
-from teleoperation.session import TeleoperationSession
 
 
 DEFAULT_RETARGETING_PROFILE_CONFIG_PATH = "configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"
-DEFAULT_DETECTION_SOURCE_CONFIG_PATH = "configs/detection_sources/avp.yaml"
+DEFAULT_DETECTION_SOURCE_CONFIG_PATH = "configs/inputs/avp.yaml"
 
 @dataclass
 class RobotReplayContext:
@@ -350,11 +347,6 @@ def run_offline_retargeting(
     Returns:
         Tuple of replay context, trajectory arrays, and run metadata.
     """
-    source = load_offline_avp_trajectory(data_file)
-    frame_indices = list(iter_frame_indices(source.n_frames, start=start, end=end, stride=stride))
-    if not frame_indices:
-        raise ValueError("No replay frames selected.")
-
     profile_metadata_source = retargeting_profile_config_path
     if retargeting_profile_config is None:
         profile_metadata_source = (
@@ -397,42 +389,40 @@ def run_offline_retargeting(
 
     retargeting_profile_config.validate(robot_config)
     context = create_robot_replay_context_from_config(robot_config, retargeting_profile_config, detection_source_config)
-    session = TeleoperationSession(
-        robot_adaptor=context.robot_adaptor,
+    flow = build_batch_retarget_flow(
+        data_file=data_file,
+        start=start,
+        end=end,
+        stride=stride,
         robot_config=context.robot_config,
         profile_config=context.retargeting_profile_config,
         method_config=retargeting_config,
-        detection_source_config=context.detection_source_config,
-        teleoperation_mode_config=teleoperation_mode_config,
+        detection_config=context.detection_source_config,
+        mode_config=teleoperation_mode_config,
         solver_config=solver_config,
+        robot_adaptor=context.robot_adaptor,
         evaluate=True,
     )
-    if not initialize_avp_alignment(
-        session,
-        source.get_frame(frame_indices[0]),
-        context.init_joint_pos,
-    ):
-        raise ValueError(f"Unable to initialize wrist alignment from source frame {frame_indices[0]}.")
 
     frames: List[RetargetReplayFrame] = []
-    for frame_idx in tqdm(frame_indices, desc="Retargeting", unit="frame"):
-        observation, qpos, diagnostics = session.retarget_input(source.get_frame(frame_idx))
-        if observation is None or qpos is None or diagnostics is None:
-            continue
+    for record in flow.run():
+        if record.source_index is None:
+            raise ValueError("Offline AVP batch results require a source frame index.")
+        observation = record.observation
         hand_kps_wrist = observation.keypoints_wrist
         wrist_pose_world = observation.wrist_pose_world
         hand_kps_world = transformPositions(hand_kps_wrist, target_frame_pose_inv=wrist_pose_world)
-        frame_qpos = np.asarray(qpos, dtype=float).copy()
+        frame_qpos = np.asarray(record.retargeted_qpos, dtype=float).copy()
 
         frames.append(
             RetargetReplayFrame(
-                frame_idx=frame_idx,
+                frame_idx=record.source_index,
                 hand_keypoints_wrist=hand_kps_wrist,
                 hand_keypoints_world=hand_kps_world,
                 wrist_pose_world=wrist_pose_world,
                 qpos=frame_qpos,
                 robot_frame_poses=compute_robot_frame_poses(context, frame_qpos),
-                err=dict(diagnostics),
+                err=dict(record.diagnostics),
             )
         )
 

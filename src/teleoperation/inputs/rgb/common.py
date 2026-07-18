@@ -15,6 +15,38 @@ from mr_utils.utils_mano import (
     OPERATOR2MANO_LEFT,
     estimate_frame_from_hand_points,
 )
+from teleoperation.types import SensorHandSample
+
+
+def decode_rgb_sample(
+    detector,
+    image: np.ndarray,
+    camera_K: np.ndarray,
+    *,
+    source_index: int | None = None,
+    timestamp: float | None = None,
+) -> SensorHandSample:
+    """Detect and normalize one externally acquired RGB frame.
+
+    Args:
+        detector: Hand detector exposing the existing ``detect`` contract.
+        image: RGB image supplied by an external transport or callback.
+        camera_K: Camera intrinsic matrix used for wrist pose estimation.
+        source_index: Optional source frame index.
+        timestamp: Optional source timestamp in seconds.
+
+    Returns:
+        Sensor sample with presentation keypoints, including missing detections.
+    """
+    _, keypoints, keypoint_2d, wrist_pose = detector.detect(image, camera_K)
+    return SensorHandSample(
+        keypoints_wrist=keypoints,
+        wrist_pose_sensor=wrist_pose,
+        raw=image,
+        source_index=source_index,
+        timestamp=timestamp,
+        presentation=keypoint_2d,
+    )
 
 
 class SingleHandDetector:

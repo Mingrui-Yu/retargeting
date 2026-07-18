@@ -2,11 +2,10 @@
 
 from retargeting.core.retargeter import Retargeter
 from retargeting.core.sequence import ObservationRetargeter, retarget_observation_sequence
-from retargeting.core.types import HandInput, HandObservation, RetargetingResult
+from retargeting.core.types import RetargetingHandObservation, RetargetingResult
 
 __all__ = [
-    "HandInput",
-    "HandObservation",
+    "RetargetingHandObservation",
     "ObservationRetargeter",
     "Retargeter",
     "RetargetingResult",

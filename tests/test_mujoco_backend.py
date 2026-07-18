@@ -55,10 +55,10 @@ def test_mujoco_backend_import_and_execution_are_headless():
 
     target = np.asarray(robot_config.initial_qpos, dtype=float)
     target[0] += 0.01
-    applied = backend.ctrl_joint_pos(target)
-    backend.step()
+    result = backend.execute(target)
 
-    np.testing.assert_allclose(applied, target)
+    np.testing.assert_allclose(result.command_qpos, target)
+    np.testing.assert_allclose(result.actual_qpos, backend.get_joint_pos())
     assert backend.data.time == pytest.approx(0.05)
     assert np.isfinite(backend.get_joint_pos()).all()
     assert backend.get_diagnostics()["simulation_time"] == pytest.approx(0.05)
@@ -97,10 +97,10 @@ def test_mujoco_backend_applies_configured_ctrlrange_policy():
     robot_config, clipping_backend = _build_backend("clip")
     target = np.asarray(robot_config.initial_qpos, dtype=float)
     target[3] = -10.0
-    applied = clipping_backend.ctrl_joint_pos(target)
+    applied = clipping_backend.execute(target).command_qpos
 
     assert applied[3] == pytest.approx(-3.0718)
 
     _, error_backend = _build_backend("error")
     with pytest.raises(ValueError, match="panda_joint4"):
-        error_backend.ctrl_joint_pos(target)
+        error_backend.execute(target)

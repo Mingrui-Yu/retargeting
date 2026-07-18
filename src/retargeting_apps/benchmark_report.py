@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 
 from retargeting_apps.config import resolve_project_path, to_plain_config_data
-from retargeting_apps.pipelines.offline_retargeting import create_robot_replay_context_from_metadata
+from retargeting_apps.offline_retargeting import create_robot_replay_context_from_metadata
 from retargeting_apps.artifacts.trajectory import (
     load_retargeting_trajectory,
     resolve_result_paths,

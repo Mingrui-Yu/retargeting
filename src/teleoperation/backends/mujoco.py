@@ -8,6 +8,7 @@ from typing import Any, Sequence
 import numpy as np
 
 from teleoperation.config import MujocoSimulationConfig, load_mujoco_simulation_config
+from teleoperation.backends.base import BackendStepResult
 
 try:
     import mujoco
@@ -226,8 +227,8 @@ class MujocoRobotBackend:
         self.target_joint_pos = reset_qpos.copy()
         mj.mj_forward(self.model, self.data)
 
-    def ctrl_joint_pos(self, qpos: Sequence[float]) -> np.ndarray:
-        """Set one position target without advancing simulation time.
+    def _set_target_joint_pos(self, qpos: Sequence[float]) -> np.ndarray:
+        """Set one validated position target without advancing simulation time.
 
         Args:
             qpos: Desired joint positions in configured retargeting order.
@@ -240,8 +241,8 @@ class MujocoRobotBackend:
         self.target_joint_pos = command.copy()
         return command.copy()
 
-    def step(self) -> None:
-        """Advance one complete 20 Hz retargeting command period.
+    def _advance_command_period(self) -> None:
+        """Advance one complete high-level command period.
 
         Args:
             None.
@@ -251,6 +252,23 @@ class MujocoRobotBackend:
         """
         mj = _require_mujoco()
         mj.mj_step(self.model, self.data, nstep=self.physics_steps_per_command)
+
+    def execute(self, qpos: Sequence[float]) -> BackendStepResult:
+        """Apply one target and advance exactly one MuJoCo command period.
+
+        Args:
+            qpos: Desired positions in configured retargeting joint order.
+
+        Returns:
+            Immutable command, measured state, and post-step diagnostics.
+        """
+        command = self._set_target_joint_pos(qpos)
+        self._advance_command_period()
+        return BackendStepResult(
+            command_qpos=command,
+            actual_qpos=self.get_joint_pos(),
+            diagnostics=self.get_diagnostics(),
+        )
 
     def get_joint_pos(self) -> np.ndarray:
         """Return simulated joint positions in retargeting order.

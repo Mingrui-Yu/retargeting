@@ -56,15 +56,15 @@ def test_retargeting_profiles_carry_robot_method_parameters():
         assert len(profile_config.target.link_pairs) == 3 * len(robot_config.benchmark.fingertips)
 
 
-def test_detection_source_configs_carry_detector_world_calibration():
+def test_input_configs_carry_detector_world_calibration():
     from teleoperation.config import load_detection_source_config
 
-    for config_path in Path("configs/detection_sources").glob("*.yaml"):
-        detection_source_config = load_detection_source_config(config_path)
+    for config_path in Path("configs/inputs").glob("*.yaml"):
+        input_config = load_detection_source_config(config_path)
 
-        assert detection_source_config.input_device in {"rgb", "avp"}
-        assert len(detection_source_config.rotation_euler_xyz_deg) == 3
-        assert len(detection_source_config.translation) == 3
+        assert input_config.input_device in {"rgb", "avp"}
+        assert len(input_config.rotation_euler_xyz_deg) == 3
+        assert len(input_config.translation) == 3
 
 
 def test_teleoperation_mode_configs_carry_runtime_flags():
@@ -75,6 +75,7 @@ def test_teleoperation_mode_configs_carry_runtime_flags():
 
         assert mode_config.name == config_path.stem
         assert 0.0 <= mode_config.output.smoothing_alpha <= 1.0
+        assert mode_config.pipeline.missing_frame_policy == "hold"
 
 
 def test_robot_meshes_are_shared_components_under_assets_meshes():

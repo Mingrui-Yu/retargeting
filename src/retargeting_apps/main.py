@@ -14,10 +14,9 @@ AppRunner = Callable[[Any, list[str]], Any]
 
 APP_MODULES: dict[str, str] = {
     "benchmark": "retargeting_apps.apps.benchmark",
-    "mujoco_offline_simulation": "retargeting_apps.apps.mujoco_offline_simulation",
-    "mujoco_online_simulation": "retargeting_apps.apps.mujoco_online_simulation",
     "offline_retarget": "retargeting_apps.apps.offline_retarget",
     "replay": "retargeting_apps.apps.replay",
+    "teleop_exe": "retargeting_apps.apps.teleop_exe",
 }
 
 

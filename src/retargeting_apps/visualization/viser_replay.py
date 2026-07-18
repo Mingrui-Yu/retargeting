@@ -3,7 +3,7 @@ import time
 from typing import Any, List
 
 import numpy as np
-from retargeting_apps.pipelines.offline_retargeting import (
+from retargeting_apps.offline_retargeting import (
     RetargetReplayFrame,
     RobotReplayContext,
     create_robot_replay_context_from_metadata,

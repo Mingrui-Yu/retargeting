@@ -13,11 +13,12 @@ def test_canonical_hand_contract_is_owned_by_retargeting_core():
     Returns:
         None.
     """
-    from retargeting.core import HandInput, HandObservation
-    from retargeting.core.types import HandInput as TypesHandInput
-    from retargeting.core.types import HandObservation as TypesHandObservation
+    from retargeting.core import RetargetingHandObservation
+    from retargeting.core.types import RetargetingHandObservation as TypesHandObservation
+    from teleoperation.inputs import HandInput
+    from teleoperation.inputs.base import HandInput as TypesHandInput
 
-    assert HandObservation is TypesHandObservation
+    assert RetargetingHandObservation is TypesHandObservation
     assert HandInput is TypesHandInput
 
 
@@ -100,7 +101,7 @@ def test_hydra_composition_keeps_phase0_profile_and_robot_values():
     from retargeting_apps.main import compose_hydra_base_config
     from teleoperation.config import load_mujoco_robot_binding_config, load_teleoperation_command_config
 
-    config = compose_hydra_base_config(["app=mujoco_online_simulation"])
+    config = compose_hydra_base_config(["app=teleop_exe", "teleoperation_modes=online_mujoco"])
     robot_config = load_robot_config(config["profile"]["robot"])
     command_config = load_teleoperation_command_config(config["profile"]["teleoperation"], robot_config=robot_config)
     binding_config = load_mujoco_robot_binding_config(config["profile"]["robot"], robot_config=robot_config)
@@ -119,7 +120,7 @@ def test_artifact_metadata_preserves_execution_fields_during_split():
         None.
     """
     from retargeting.config import load_config_data, load_retargeting_profile_config, load_robot_config
-    from retargeting_apps.pipelines.offline_retargeting import (
+    from retargeting_apps.offline_retargeting import (
         retargeting_profile_config_to_metadata_dict,
         robot_config_to_metadata_dict,
     )

@@ -122,10 +122,12 @@ def test_canonical_runtime_packages_import_without_optional_dependencies():
         sys.meta_path.insert(0, BlockOptionalImports())
 
         import teleoperation.backends
-        import teleoperation.avp_alignment
         import teleoperation.config
+        import teleoperation.flow
         import teleoperation.inputs
-        import teleoperation.mujoco_runtime
+        import teleoperation.inputs.avp.offline
+        import teleoperation.observation_mapping
+        import teleoperation.types
         """
     )
 

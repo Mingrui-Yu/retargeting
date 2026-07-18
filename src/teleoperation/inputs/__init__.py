@@ -1,5 +1,5 @@
-"""Device adapters and offline human input sources."""
+"""Sensor-first hand input contracts and implementations."""
 
-from teleoperation.inputs.adapter import DetectedHand, HandObservationAdapter
+from teleoperation.inputs.base import HandInput
 
-__all__ = ["DetectedHand", "HandObservationAdapter"]
+__all__ = ["HandInput"]

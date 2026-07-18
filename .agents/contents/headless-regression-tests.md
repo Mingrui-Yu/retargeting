@@ -6,18 +6,19 @@ The focused offline regression file is `tests/test_replay_smoke.py`. It currentl
 
 - the Phase 4 robot-asset layout, including removal of obsolete root-level URDF links;
 - the promoted 760-frame AVP fixture `tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz` and its first recorded `retarget_qpos`;
-- static `AvpDetector.detect()` parsing with a fake live AVP dependency;
+- shared `decode_avp_sample()` parsing without the live AVP dependency;
 - configured Panda+Leap URDF loading and `RobotAdaptor` qpos/Jacobian mappings;
 - Panda+Leap profile lower-bound overrides reaching both the optimizer and its solver;
 - one `VectorWristJointOptimizer.retarget()` call for each supported SLSQP backend: NLopt and SciPy.
 
 The full headless suite also validates the self-contained Panda+Leap portable bundle manifest and relative resource
 paths. When the optional `mujoco` dependency is installed, it compiles the bundled MJCF without launching a viewer;
-otherwise that test reports an explicit skip. The shared MuJoCo runtime tests additionally validate joint-name state mapping,
-position-actuator control ranges, 20 Hz command stepping, startup interpolation, direct execution, missing-detection
-hold behavior, and the absence of viewer or saved-trajectory dependencies. The offline-human tests verify that only
-raw `stream_*` arrays are loaded, existing `retarget_qpos` data is ignored, hold/direct frames consume one command
-period, startup frames may consume multiple periods, and real raw AVP input retargets directly into headless MuJoCo.
+otherwise that test reports an explicit skip. The shared execution-flow tests additionally validate joint-name state
+mapping, atomic backend periods, position-actuator control ranges, 20 Hz command stepping, startup interpolation,
+direct execution, missing-detection hold behavior, mapping/reset state, and the absence of viewer or saved-trajectory
+dependencies. The offline-human tests verify that AVP online/offline acquisition shares one decoder, only raw
+`stream_*` arrays are loaded, existing `retarget_qpos` data is ignored, hold/direct frames consume one command period,
+startup frames may consume multiple periods, and real raw AVP input retargets directly into headless MuJoCo.
 Passive mjviser tests use fake
 server/scene objects to cover initial and per-frame publication, client/final-state waits, and guaranteed cleanup
 without opening a socket or browser. They also bind all 23 Panda+Leap hinge-joint readouts through compiled
@@ -287,3 +288,42 @@ check, old-entrypoint residue search, and `git diff --check` also passed.
 After moving the shared builder into `retargeting_apps.pipelines`, 23 focused app-ownership/runtime/offline tests
 passed in 5.92 s and all 112 headless tests passed in 18.13 s. Direct import from the new canonical path, removal of
 the old top-level path, `compileall`, the 120-character line-length check, and `git diff --check` also passed.
+
+## Flat Teleoperation Architecture Final Verification
+
+The 2026-07-18 flattening replaces the nested driver/runtime/session controller chain with two peer top-level flows:
+
+- `ExecutionFlow` directly owns one `HandInput`, one `HandObservationMapper`, `Retargeter`, qpos output filtering,
+  optional raw-result evaluation, command policy, atomic `RobotBackend.execute()`, timing, observers, and reset.
+- `BatchRetargetFlow` uses the same sensor/mapping/retarget/filter path but has no robot backend, command timing, hold
+  result, or execution-only nullable fields; later missing detections are skipped.
+- `AvpOnlineInput` and `AvpOfflineInput` both call `inputs/avp/common.py`; importing archived AVP input does not load
+  `avp_stream`. `SensorHandSample` distinguishes a missing detection from finite end-of-stream.
+- `RetargetingHandObservation` is the only canonical core solver input. `HandInput` is owned by teleoperation.
+- Live and archived MuJoCo apps both receive a complete flow from `retargeting_apps.composition` and call
+  `flow.run()`. ROS RGB callback compatibility decodes a sample and calls `flow.step(sample)`.
+- `TeleoperationSession`, the MuJoCo runtime/driver/result modules, the generic observation adapter, the standalone
+  AVP alignment helper, and `retargeting_apps/pipelines/` are removed.
+
+Three pre-change fixture baselines were recomputed from `HEAD` in an isolated `/tmp` archive and compared to the new
+batch flow: simulation frames `[0, 1, 2]`, real-world smoothing frames `[0, 1, 2]`, and window frames `[5, 7, 9]`.
+All frame indices matched and every qpos maximum absolute difference was `0.0`.
+
+The final verification is 8 focused replay tests, 24 focused MuJoCo/flow/offline/viewer tests, and 117 tests in the
+complete headless suite. The focused suites completed in 2.20 s and 3.75 s; the full suite completed in 17.80 s.
+`compileall`, the 120-character changed-source check, package import boundaries, and `git diff --check` passed.
+`ruff` and `black` are not installed in the project environment and were not run or installed.
+
+## Ideal Kinematic Backend
+
+The 2026-07-18 ideal backend adds `KinematicRobotBackend` as the dependency-free execution target for command-faithful
+visualization:
+
+- Every accepted command is realized atomically with `actual_qpos == command_qpos`; reset synchronizes both states.
+- Joint ranges, startup speed limits, missing-frame hold, pacing, and observers remain owned by `ExecutionFlow` and
+  `QposCommandLimiter`.
+- The backend contains no Pinocchio, MuJoCo, ROS, camera, or viewer dependency. Visualization consumes immutable
+  command results through flow observers.
+
+The focused backend/runtime/import suite passed 39 tests in 4.94 s, and all 134 headless tests passed in 17.37 s.
+`compileall`, canonical package/direct imports, the changed-source line-length check, and `git diff --check` passed.

@@ -1,8 +1,9 @@
 """Robot execution backends with lazy optional simulator loading."""
 
-from teleoperation.backends.base import RobotBackend
+from teleoperation.backends.base import BackendStepResult, RobotBackend
+from teleoperation.backends.kinematic import KinematicRobotBackend
 
-__all__ = ["MujocoRobotBackend", "RobotBackend"]
+__all__ = ["BackendStepResult", "KinematicRobotBackend", "MujocoRobotBackend", "RobotBackend"]
 
 
 def __getattr__(name: str):

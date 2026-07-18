@@ -138,10 +138,64 @@ class TeleoperationOutputConfig:
 
 
 @dataclass(frozen=True)
+class TeleoperationPipelineConfig:
+    """Execution-pipeline policy selected by a teleoperation setup."""
+
+    realtime: bool | None = None
+    startup_move_frames: int | None = None
+    ctrlrange_policy: str | None = None
+    use_relative_wrist_alignment: bool | None = None
+    missing_frame_policy: str = "hold"
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "TeleoperationPipelineConfig":
+        """Build execution-pipeline policy from mode config data.
+
+        Args:
+            data: Optional mapping with pacing, startup, alignment, and hold policy.
+
+        Returns:
+            Typed teleoperation pipeline config.
+        """
+        data = {} if data is None else data
+        return cls(
+            realtime=None if "realtime" not in data else bool(data["realtime"]),
+            startup_move_frames=data.get("startup_move_frames"),
+            ctrlrange_policy=None if data.get("ctrlrange_policy") is None else str(data["ctrlrange_policy"]),
+            use_relative_wrist_alignment=(
+                None
+                if "use_relative_wrist_alignment" not in data
+                else bool(data["use_relative_wrist_alignment"])
+            ),
+            missing_frame_policy=str(data.get("missing_frame_policy", "hold")),
+        )
+
+    def validate(self) -> None:
+        """Validate execution-pipeline policy values.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        if self.startup_move_frames is not None:
+            if isinstance(self.startup_move_frames, bool) or not isinstance(self.startup_move_frames, int):
+                raise ValueError("startup_move_frames must be a non-negative integer.")
+            if self.startup_move_frames < 0:
+                raise ValueError("startup_move_frames must be a non-negative integer.")
+        if self.ctrlrange_policy is not None and self.ctrlrange_policy not in {"clip", "error"}:
+            raise ValueError(f"ctrlrange_policy must be 'clip' or 'error', got {self.ctrlrange_policy!r}.")
+        if self.missing_frame_policy != "hold":
+            raise ValueError(f"missing_frame_policy must be 'hold', got {self.missing_frame_policy!r}.")
+
+
+@dataclass(frozen=True)
 class TeleoperationModeConfig:
     name: str
     robot_control: TeleoperationRobotControlConfig
     output: TeleoperationOutputConfig
+    pipeline: TeleoperationPipelineConfig
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "TeleoperationModeConfig":
@@ -157,6 +211,7 @@ class TeleoperationModeConfig:
             name=str(data["name"]),
             robot_control=TeleoperationRobotControlConfig.from_dict(data.get("robot_control")),
             output=TeleoperationOutputConfig.from_dict(data.get("output")),
+            pipeline=TeleoperationPipelineConfig.from_dict(data.get("pipeline")),
         )
 
     def validate(self) -> None:
@@ -171,6 +226,7 @@ class TeleoperationModeConfig:
         if not self.name:
             raise ValueError("Teleoperation mode name must not be empty.")
         self.output.validate()
+        self.pipeline.validate()
 
 
 @dataclass(frozen=True)
@@ -391,6 +447,7 @@ def default_teleoperation_mode_config() -> TeleoperationModeConfig:
         name="simulation",
         robot_control=TeleoperationRobotControlConfig(),
         output=TeleoperationOutputConfig(),
+        pipeline=TeleoperationPipelineConfig(),
     )
 
 
@@ -425,11 +482,14 @@ def load_teleoperation_mode_config(
     """
     if isinstance(path, TeleoperationModeConfig):
         return path
-    config = (
-        default_teleoperation_mode_config()
-        if path is None
-        else TeleoperationModeConfig.from_dict(load_config_source(path))
-    )
+    if path is None:
+        config = default_teleoperation_mode_config()
+    else:
+        data = load_config_source(path)
+        mode_data = data.get("teleoperation_mode", data)
+        if not isinstance(mode_data, dict):
+            raise ValueError("Expected teleoperation mode settings to be a mapping.")
+        config = TeleoperationModeConfig.from_dict(mode_data)
     config.validate()
     return config
 
@@ -449,5 +509,119 @@ def load_mujoco_simulation_config(
         config = path
     else:
         config = MujocoSimulationConfig.from_dict(None if path is None else load_config_source(path))
+    config.validate()
+    return config
+
+
+@dataclass(frozen=True)
+class ExecutionBackendConfig:
+    """Backend selection and command-period timing for execution flows."""
+
+    name: str = "mujoco"
+    command_hz: float = 20.0
+    physics_timestep: float = 0.002
+    realtime: bool = True
+    ctrlrange_policy: str = "clip"
+    startup_move_frames: int = 0
+
+    @classmethod
+    def from_dict(
+        cls,
+        data: dict[str, Any] | None,
+        *,
+        default_name: str = "mujoco",
+    ) -> "ExecutionBackendConfig":
+        """Build execution backend settings from config data.
+
+        Args:
+            data: Optional mapping with backend selection and timing settings.
+            default_name: Backend name used when legacy timing config omits one.
+
+        Returns:
+            Typed execution backend config.
+        """
+        data = {} if data is None else data
+        return cls(
+            name=str(data.get("name", data.get("type", default_name))),
+            command_hz=float(data.get("command_hz", 20.0)),
+            physics_timestep=float(data.get("physics_timestep", 0.002)),
+            realtime=bool(data.get("realtime", True)),
+            ctrlrange_policy=str(data.get("ctrlrange_policy", "clip")),
+            startup_move_frames=data.get("startup_move_frames", 0),
+        )
+
+    @property
+    def control_period(self) -> float:
+        """Return the command period shared by policy and backend.
+
+        Args:
+            None.
+
+        Returns:
+            Fixed command period in seconds.
+        """
+        return 1.0 / self.command_hz
+
+    def to_mujoco_simulation_config(self) -> MujocoSimulationConfig:
+        """Convert shared backend settings into MuJoCo-specific timing config.
+
+        Args:
+            None.
+
+        Returns:
+            Validated MuJoCo simulation config.
+        """
+        return MujocoSimulationConfig(
+            command_hz=self.command_hz,
+            physics_timestep=self.physics_timestep,
+            realtime=self.realtime,
+            ctrlrange_policy=self.ctrlrange_policy,
+            startup_move_frames=self.startup_move_frames,
+        )
+
+    def validate(self) -> None:
+        """Validate backend selection and shared timing semantics.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        if self.name not in {"mujoco", "kinematic"}:
+            raise ValueError(f"Unsupported backend name: {self.name!r}.")
+        if self.command_hz <= 0:
+            raise ValueError(f"command_hz must be positive, got {self.command_hz}.")
+        if self.ctrlrange_policy not in {"clip", "error"}:
+            raise ValueError(f"ctrlrange_policy must be 'clip' or 'error', got {self.ctrlrange_policy!r}.")
+        if isinstance(self.startup_move_frames, bool) or not isinstance(self.startup_move_frames, int):
+            raise ValueError("startup_move_frames must be a non-negative integer.")
+        if self.startup_move_frames < 0:
+            raise ValueError("startup_move_frames must be a non-negative integer.")
+        if self.name == "mujoco":
+            self.to_mujoco_simulation_config().validate()
+
+
+def load_execution_backend_config(
+    path: str | Path | Mapping[str, Any] | ExecutionBackendConfig | None,
+    *,
+    default_name: str = "mujoco",
+) -> ExecutionBackendConfig:
+    """Load and validate execution backend selection and timing settings.
+
+    Args:
+        path: YAML path, composed mapping, typed config, or None.
+        default_name: Backend name used when loading legacy timing-only config.
+
+    Returns:
+        Validated execution backend config.
+    """
+    if isinstance(path, ExecutionBackendConfig):
+        config = path
+    else:
+        config = ExecutionBackendConfig.from_dict(
+            None if path is None else load_config_source(path),
+            default_name=default_name,
+        )
     config.validate()
     return config

@@ -1,0 +1,4 @@
+# @package backend
+name: mujoco
+command_hz: 20.0
+physics_timestep: 0.002

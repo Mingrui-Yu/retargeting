@@ -1,6 +1,0 @@
-# @package simulator
-command_hz: 20.0
-physics_timestep: 0.002
-realtime: true
-ctrlrange_policy: clip
-startup_move_frames: 0

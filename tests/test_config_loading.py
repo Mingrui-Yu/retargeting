@@ -120,8 +120,8 @@ def test_retargeting_config_rejects_unknown_ablation_option():
 def test_detection_source_configs_load_detector_calibration():
     from teleoperation.config import load_detection_source_config
 
-    avp_config = load_detection_source_config("configs/detection_sources/avp.yaml")
-    rgb_config = load_detection_source_config("configs/detection_sources/rgb.yaml")
+    avp_config = load_detection_source_config("configs/inputs/avp.yaml")
+    rgb_config = load_detection_source_config("configs/inputs/rgb.yaml")
 
     assert avp_config.input_device == "avp"
     assert avp_config.rotation_euler_xyz_deg == (0.0, 0.0, 180.0)
@@ -138,16 +138,22 @@ def test_teleoperation_mode_configs_load_runtime_flags():
     simulation_config = load_teleoperation_mode_config("configs/teleoperation_modes/simulation.yaml")
     real_world_config = load_teleoperation_mode_config("configs/teleoperation_modes/real_world.yaml")
     virtual_hardware_config = load_teleoperation_mode_config("configs/teleoperation_modes/virtual_hardware.yaml")
+    offline_mujoco_config = load_teleoperation_mode_config("configs/teleoperation_modes/offline_mujoco.yaml")
 
     assert simulation_config.name == "simulation"
     assert simulation_config.robot_control.use_hardware is False
     assert simulation_config.output.smooth_output_qpos is False
+    assert simulation_config.pipeline.missing_frame_policy == "hold"
     assert real_world_config.robot_control.use_hardware is True
     assert real_world_config.robot_control.use_virtual_hardware is False
     assert real_world_config.output.smooth_output_qpos is True
     assert virtual_hardware_config.robot_control.use_hardware is True
     assert virtual_hardware_config.robot_control.use_virtual_hardware is True
     assert virtual_hardware_config.output.smooth_output_qpos is False
+    assert offline_mujoco_config.name == "offline_mujoco"
+    assert offline_mujoco_config.pipeline.realtime is False
+    assert offline_mujoco_config.pipeline.startup_move_frames == 1
+    assert offline_mujoco_config.pipeline.use_relative_wrist_alignment is True
 
 
 def test_default_teleoperation_mode_is_simulation():
@@ -158,6 +164,7 @@ def test_default_teleoperation_mode_is_simulation():
     assert config.name == "simulation"
     assert config.robot_control.use_hardware is False
     assert config.output.smoothing_alpha == 0.3
+    assert config.pipeline.missing_frame_policy == "hold"
 
 
 def test_mujoco_simulator_config_uses_20_hz_integer_substeps():
@@ -171,7 +178,7 @@ def test_mujoco_simulator_config_uses_20_hz_integer_substeps():
     """
     from teleoperation.config import load_mujoco_simulation_config
 
-    config = load_mujoco_simulation_config("configs/simulators/mujoco.yaml")
+    config = load_mujoco_simulation_config("configs/backends/mujoco.yaml")
 
     assert config.command_hz == 20.0
     assert config.control_period == 0.05
@@ -188,6 +195,32 @@ def test_mujoco_simulator_config_uses_20_hz_integer_substeps():
         load_mujoco_simulation_config({"startup_move_frames": -1})
     with pytest.raises(ValueError, match="startup_move_frames"):
         load_mujoco_simulation_config({"startup_move_frames": True})
+
+
+def test_execution_backend_configs_select_backend_and_timing():
+    """Verify backend config group supports MuJoCo and kinematic execution.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    from teleoperation.config import load_execution_backend_config
+
+    mujoco_config = load_execution_backend_config("configs/backends/mujoco.yaml")
+    kinematic_config = load_execution_backend_config("configs/backends/kinematic.yaml")
+    legacy_config = load_execution_backend_config({"command_hz": 20.0}, default_name="mujoco")
+
+    assert mujoco_config.name == "mujoco"
+    assert mujoco_config.to_mujoco_simulation_config().physics_steps_per_command == 25
+    assert mujoco_config.realtime is True
+    assert mujoco_config.startup_move_frames == 0
+    assert kinematic_config.name == "kinematic"
+    assert kinematic_config.control_period == 0.05
+    assert legacy_config.name == "mujoco"
+    with pytest.raises(ValueError, match="Unsupported backend"):
+        load_execution_backend_config({"name": "unknown"})
 
 
 def test_mujoco_web_viewer_config_loads_and_validates_application_settings():
@@ -340,8 +373,9 @@ def test_base_config_selects_each_whitelisted_app():
     offline_config = compose_hydra_base_config(["app=offline_retarget"])
     replay_config = compose_hydra_base_config(["app=replay"])
     benchmark_config = compose_hydra_base_config(["app=benchmark"])
-    mujoco_online_config = compose_hydra_base_config(["app=mujoco_online_simulation"])
-    mujoco_offline_config = compose_hydra_base_config(["app=mujoco_offline_simulation"])
+    teleop_exe_config = compose_hydra_base_config(["app=teleop_exe"])
+    teleop_online_mujoco_config = compose_hydra_base_config(["app=teleop_exe", "teleoperation_modes=online_mujoco"])
+    teleop_offline_mujoco_config = compose_hydra_base_config(["app=teleop_exe", "teleoperation_modes=offline_mujoco"])
 
     assert offline_config["app"]["id"] == "offline_retarget"
     assert "profile" in offline_config
@@ -350,23 +384,27 @@ def test_base_config_selects_each_whitelisted_app():
     assert "profile" not in replay_config
     assert benchmark_config["app"]["id"] == "benchmark"
     assert "profile" not in benchmark_config
-    assert mujoco_online_config["app"]["id"] == "mujoco_online_simulation"
-    assert mujoco_online_config["profile"]["name"] == "vector_wrist_joint_panda_leap_paxini"
-    assert mujoco_online_config["simulator"]["command_hz"] == 20.0
-    assert "data" not in mujoco_online_config
-    assert "run_name" not in mujoco_online_config
-    assert Path("configs/app/mujoco_online_simulation.yaml").is_file()
-    assert not Path("configs/app/mujoco_simulation.yaml").exists()
-    assert mujoco_offline_config["app"]["id"] == "mujoco_offline_simulation"
-    assert mujoco_offline_config["data"].endswith(".npz")
-    assert mujoco_offline_config["source_hz"] == 20.0
-    assert mujoco_offline_config["loop"] is False
-    assert mujoco_offline_config["simulator"]["command_hz"] == 20.0
-    assert mujoco_offline_config["simulator"]["realtime"] is False
-    assert mujoco_offline_config["viewer"]["enabled"] is False
-    assert mujoco_offline_config["viewer"]["port"] == 9219
-    assert mujoco_offline_config["viewer"]["wait_for_client"] is True
-    assert "run_name" not in mujoco_offline_config
+    assert teleop_exe_config["app"]["id"] == "teleop_exe"
+    assert teleop_exe_config["teleoperation_mode"]["name"] == "offline_kinematic"
+    assert teleop_exe_config["input"]["mode"] == "offline"
+    assert teleop_exe_config["input"]["input_device"] == "avp"
+    assert teleop_exe_config["backend"]["name"] == "kinematic"
+    assert teleop_exe_config["backend"]["command_hz"] == 20.0
+    assert teleop_online_mujoco_config["teleoperation_mode"]["name"] == "online_mujoco"
+    assert teleop_online_mujoco_config["input"]["mode"] == "online"
+    assert teleop_online_mujoco_config["backend"]["name"] == "mujoco"
+    assert teleop_online_mujoco_config["backend"]["command_hz"] == 20.0
+    assert "data" not in teleop_online_mujoco_config
+    assert teleop_offline_mujoco_config["teleoperation_mode"]["name"] == "offline_mujoco"
+    assert teleop_offline_mujoco_config["input"]["data"].endswith(".npz")
+    assert teleop_offline_mujoco_config["input"]["source_hz"] == 20.0
+    assert teleop_offline_mujoco_config["input"]["loop"] is False
+    assert teleop_offline_mujoco_config["backend"]["command_hz"] == 20.0
+    assert teleop_offline_mujoco_config["teleoperation_mode"]["pipeline"]["realtime"] is False
+    assert teleop_offline_mujoco_config["teleoperation_mode"]["pipeline"]["startup_move_frames"] == 1
+    assert teleop_offline_mujoco_config["viewer"]["enabled"] is False
+    assert teleop_offline_mujoco_config["viewer"]["port"] == 9219
+    assert teleop_offline_mujoco_config["viewer"]["wait_for_client"] is True
 
 
 def test_main_dispatcher_rejects_unknown_app_id():

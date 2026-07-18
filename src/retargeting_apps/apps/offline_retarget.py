@@ -11,7 +11,7 @@ from retargeting.config import (
     load_solver_config,
 )
 from retargeting_apps.config import resolve_project_path, to_plain_config_data
-from retargeting_apps.pipelines.offline_retargeting import DEFAULT_DETECTION_SOURCE_CONFIG_PATH, run_offline_retargeting
+from retargeting_apps.offline_retargeting import DEFAULT_DETECTION_SOURCE_CONFIG_PATH, run_offline_retargeting
 from retargeting_apps.artifacts.trajectory import save_retargeting_trajectory
 from teleoperation.config import load_detection_source_config, load_teleoperation_mode_config
 
@@ -135,7 +135,7 @@ def run_benchmark_post_action(config: dict[str, Any]) -> tuple[Path, Path | None
     Returns:
         Tuple of benchmark output directory and optional plot output directory.
     """
-    from retargeting_apps.pipelines.benchmark_report import run_benchmark_from_config
+    from retargeting_apps.benchmark_report import run_benchmark_from_config
 
     return run_benchmark_from_config(config)
 
@@ -202,9 +202,7 @@ def run(config: Any, argv: list[str]) -> Path:
 
     app_data = config_data.get("app", {})
     profile_source = config_data.get("profile", app_data.get("profile"))
-    detection_source = config_data.get(
-        "detection_source", app_data.get("detection_source", DEFAULT_DETECTION_SOURCE_CONFIG_PATH)
-    )
+    detection_source = config_data.get("input", app_data.get("input", DEFAULT_DETECTION_SOURCE_CONFIG_PATH))
     solver_source = config_data.get("solver", app_data.get("solver"))
     teleoperation_mode_source = config_data.get("teleoperation_mode", app_data.get("teleoperation_mode"))
     profile_config = load_retargeting_profile_config(profile_source)

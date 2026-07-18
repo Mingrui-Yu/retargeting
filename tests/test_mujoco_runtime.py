@@ -5,14 +5,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from retargeting.core.types import HandObservation
+from retargeting.core.types import RetargetingHandObservation, RetargetingResult
+from teleoperation.backends.base import BackendStepResult
+from teleoperation.types import ExecutionStatus, SensorHandSample
 
 
 class _FakeClock:
-    """Deterministic wall clock used to test real-time pacing."""
+    """Deterministic wall clock used for pacing and overrun tests."""
 
     def __init__(self) -> None:
-        """Initialize wall time at zero.
+        """Initialize fake wall time at zero.
 
         Args:
             None.
@@ -34,7 +36,7 @@ class _FakeClock:
         return self.now
 
     def sleep(self, duration: float) -> None:
-        """Advance fake wall time by a requested sleep duration.
+        """Advance fake time by a requested sleep duration.
 
         Args:
             duration: Non-negative duration in seconds.
@@ -46,15 +48,16 @@ class _FakeClock:
 
 
 class _FakeBackend:
-    """Minimal deterministic backend with a 20 Hz command period."""
+    """Two-joint backend with atomic 20 Hz command periods."""
 
     control_period = 0.05
 
-    def __init__(self) -> None:
-        """Initialize a two-joint state.
+    def __init__(self, clock: _FakeClock | None = None, compute_time: float = 0.0) -> None:
+        """Initialize target, measured state, and command history.
 
         Args:
-            None.
+            clock: Optional fake clock advanced by backend compute.
+            compute_time: Seconds consumed by each atomic execute call.
 
         Returns:
             None.
@@ -62,10 +65,13 @@ class _FakeBackend:
         self.target = np.zeros(2)
         self.actual = np.zeros(2)
         self.simulation_time = 0.0
-        self.command_history = []
+        self.command_history: list[np.ndarray] = []
+        self.reset_history: list[np.ndarray] = []
+        self.clock = clock
+        self.compute_time = compute_time
 
     def reset(self, qpos=None) -> None:
-        """Reset target and actual joint state.
+        """Reset target, measured state, and simulated time.
 
         Args:
             qpos: Optional two-joint reset position.
@@ -76,45 +82,21 @@ class _FakeBackend:
         self.target = np.zeros(2) if qpos is None else np.asarray(qpos, dtype=float).copy()
         self.actual = self.target.copy()
         self.simulation_time = 0.0
-
-    def ctrl_joint_pos(self, qpos) -> np.ndarray:
-        """Accept one target command.
-
-        Args:
-            qpos: Two-joint target command.
-
-        Returns:
-            Applied target command.
-        """
-        self.target = np.asarray(qpos, dtype=float).copy()
-        self.command_history.append(self.target.copy())
-        return self.target.copy()
-
-    def step(self) -> None:
-        """Advance one command period and realize the target exactly.
-
-        Args:
-            None.
-
-        Returns:
-            None.
-        """
-        self.actual = self.target.copy()
-        self.simulation_time += self.control_period
+        self.reset_history.append(self.target.copy())
 
     def get_joint_pos(self) -> np.ndarray:
-        """Return current actual positions.
+        """Return current measured positions.
 
         Args:
             None.
 
         Returns:
-            Two-joint actual state.
+            Two-joint measured state.
         """
         return self.actual.copy()
 
     def get_target_joint_pos(self) -> np.ndarray:
-        """Return the current target positions.
+        """Return the last accepted target.
 
         Args:
             None.
@@ -124,23 +106,33 @@ class _FakeBackend:
         """
         return self.target.copy()
 
-    def get_diagnostics(self) -> dict[str, float]:
-        """Return simulated time for runtime diagnostic merging.
+    def execute(self, qpos: np.ndarray) -> BackendStepResult:
+        """Execute one atomic command period and realize the target exactly.
 
         Args:
-            None.
+            qpos: Two-joint target command.
 
         Returns:
-            Mapping containing simulation time.
+            Immutable post-period backend state.
         """
-        return {"simulation_time": self.simulation_time}
+        self.target = np.asarray(qpos, dtype=float).copy()
+        self.command_history.append(self.target.copy())
+        if self.clock is not None:
+            self.clock.now += self.compute_time
+        self.actual = self.target.copy()
+        self.simulation_time += self.control_period
+        return BackendStepResult(
+            command_qpos=self.target,
+            actual_qpos=self.actual,
+            diagnostics={"simulation_time": self.simulation_time},
+        )
 
 
-class _FakeSession:
-    """Session that exposes the requested qpos through observation keypoints."""
+class _FakeRetargeter:
+    """Return qpos encoded in canonical observation keypoints."""
 
     def __init__(self) -> None:
-        """Initialize an empty reset record.
+        """Initialize temporal state and call records.
 
         Args:
             None.
@@ -148,139 +140,368 @@ class _FakeSession:
         Returns:
             None.
         """
-        self.reset_qpos = []
+        self.qpos_init = np.zeros(2)
+        self.previous_qpos = self.qpos_init.copy()
+        self.previous_references: list[np.ndarray] = []
+        self.reset_history: list[np.ndarray] = []
 
-    def reset(self, qpos=None) -> None:
-        """Record the runtime reset configuration.
+    def solve(self, observation, previous_qpos=None) -> RetargetingResult:
+        """Return the first two values encoded by the observation.
 
         Args:
-            qpos: Optional reset configuration supplied by the runtime.
+            observation: Canonical observation carrying a fake target.
+            previous_qpos: Temporal reference supplied by the flow.
+
+        Returns:
+            Raw qpos and deterministic solver diagnostics.
+        """
+        self.previous_references.append(np.asarray(previous_qpos, dtype=float).copy())
+        return RetargetingResult(
+            qpos=np.asarray(observation.keypoints_wrist[0, :2], dtype=float).copy(),
+            diagnostics={"optimization_time": 0.001},
+        )
+
+    def reset(self, previous_qpos=None) -> None:
+        """Reset the fake temporal reference.
+
+        Args:
+            previous_qpos: Reset reference supplied by the flow.
 
         Returns:
             None.
         """
-        self.reset_qpos.append(None if qpos is None else np.asarray(qpos, dtype=float).copy())
+        self.previous_qpos = np.asarray(previous_qpos, dtype=float).copy()
+        self.reset_history.append(self.previous_qpos.copy())
 
-    def retarget_observation(self, observation: HandObservation):
-        """Return a two-joint command encoded in the first keypoint.
 
-        Args:
-            observation: Canonical observation carrying the requested command.
+class _FakeMapper:
+    """Identity-like mapper with configurable initialization outcomes."""
 
-        Returns:
-            Requested qpos and deterministic diagnostics.
-        """
-        return observation.keypoints_wrist[0, :2].copy(), {"optimization_time": 0.001}
-
-    def detect_observation(self, sensor_data, camera_K=None):
-        """Treat a canonical observation as already detected sensor data.
+    def __init__(self, initialization_results: tuple[bool, ...] = ()) -> None:
+        """Initialize mapping and reset call records.
 
         Args:
-            sensor_data: Observation instance or None for a missed detection.
-            camera_K: Unused camera intrinsics.
+            initialization_results: Optional deterministic outcomes before normal validity.
 
         Returns:
-            Supplied observation or None.
+            None.
         """
-        del camera_K
-        return sensor_data
+        self._initialization_results = iter(initialization_results)
+        self.initialize_qpos: list[np.ndarray] = []
+        self.reset_count = 0
+
+    def initialize(self, sample: SensorHandSample, robot_qpos: np.ndarray) -> bool:
+        """Record measured qpos and return a configured mapping outcome.
+
+        Args:
+            sample: Current sensor sample.
+            robot_qpos: Current measured backend state.
+
+        Returns:
+            Configured result, or sample validity after outcomes are exhausted.
+        """
+        self.initialize_qpos.append(np.asarray(robot_qpos, dtype=float).copy())
+        try:
+            return next(self._initialization_results)
+        except StopIteration:
+            return sample.has_hand
+
+    def map(self, sample: SensorHandSample) -> RetargetingHandObservation | None:
+        """Map complete samples directly into canonical observations.
+
+        Args:
+            sample: Current sensor-normalized sample.
+
+        Returns:
+            Canonical observation, or None for missing hand data.
+        """
+        if not sample.has_hand:
+            return None
+        return RetargetingHandObservation(
+            keypoints_wrist=sample.keypoints_wrist,
+            wrist_pose_world=sample.wrist_pose_sensor,
+            raw=sample.raw,
+        )
+
+    def reset(self) -> None:
+        """Record one mapper reset.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        self.reset_count += 1
 
 
-def _observation(qpos: tuple[float, float]) -> HandObservation:
-    """Build a canonical observation carrying a requested two-joint command.
+class _FakeEvaluator:
+    """Record the raw qpos supplied before output filtering."""
+
+    def __init__(self) -> None:
+        """Initialize an empty raw-qpos history.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        self.raw_qpos: list[np.ndarray] = []
+
+    def _record(self, qpos: np.ndarray) -> float:
+        """Record one raw result and return its first value.
+
+        Args:
+            qpos: Raw optimized qpos.
+
+        Returns:
+            First qpos value as a deterministic metric.
+        """
+        self.raw_qpos.append(np.asarray(qpos, dtype=float).copy())
+        return float(qpos[0])
+
+    def position_error(self, qpos, keypoints, scale):
+        """Record raw qpos for the first benchmark metric.
+
+        Args:
+            qpos: Raw optimized qpos.
+            keypoints: Unused canonical keypoints.
+            scale: Unused metric scale.
+
+        Returns:
+            Deterministic scalar metric.
+        """
+        del keypoints, scale
+        return self._record(qpos)
+
+    def orientation_error(self, qpos, keypoints, scale):
+        """Return the deterministic orientation metric.
+
+        Args:
+            qpos: Raw optimized qpos.
+            keypoints: Unused canonical keypoints.
+            scale: Unused metric scale.
+
+        Returns:
+            Deterministic scalar metric.
+        """
+        del keypoints, scale
+        return float(qpos[0])
+
+    def relative_position_error(self, qpos, keypoints, scale):
+        """Return the deterministic relative-position metric.
+
+        Args:
+            qpos: Raw optimized qpos.
+            keypoints: Unused canonical keypoints.
+            scale: Unused metric scale.
+
+        Returns:
+            Deterministic scalar metric.
+        """
+        del keypoints, scale
+        return float(qpos[0])
+
+    def relative_position_to_wrist_error(self, qpos, keypoints, scale):
+        """Return the deterministic wrist-relative metric.
+
+        Args:
+            qpos: Raw optimized qpos.
+            keypoints: Unused canonical keypoints.
+            scale: Unused metric scale.
+
+        Returns:
+            Deterministic scalar metric.
+        """
+        del keypoints, scale
+        return float(qpos[0])
+
+
+class _FiniteInput:
+    """Two-frame finite input that records lifecycle operations."""
+
+    def __init__(self) -> None:
+        """Initialize lifecycle counters and cursor.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        self.samples = [_sample((0.1, -0.1), 0), _sample((0.2, -0.2), 1)]
+        self.cursor = 0
+        self.open_count = 0
+        self.reset_count = 0
+        self.close_count = 0
+
+    def open(self) -> None:
+        """Open the source at its first frame.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        self.cursor = 0
+        self.open_count += 1
+
+    def read(self) -> SensorHandSample | None:
+        """Return the next sample or finite end-of-stream.
+
+        Args:
+            None.
+
+        Returns:
+            Next sample, or None after two frames.
+        """
+        if self.cursor >= len(self.samples):
+            return None
+        sample = self.samples[self.cursor]
+        self.cursor += 1
+        return sample
+
+    def reset(self) -> None:
+        """Rewind the source for a new cycle.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        self.cursor = 0
+        self.reset_count += 1
+
+    def close(self) -> None:
+        """Record source closure.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        self.close_count += 1
+
+
+def _sample(qpos: tuple[float, float] | None, source_index: int = 0) -> SensorHandSample:
+    """Build a complete or missing sensor sample.
 
     Args:
-        qpos: Requested command encoded into the first keypoint.
+        qpos: Target encoded in the first keypoint, or None for missing hand data.
+        source_index: Source metadata attached to the sample.
 
     Returns:
-        Canonical hand observation for the fake session.
+        Sensor-normalized sample for flow tests.
     """
+    if qpos is None:
+        return SensorHandSample(None, None, raw=None, source_index=source_index)
     keypoints = np.zeros((21, 3))
     keypoints[0, :2] = qpos
-    return HandObservation(keypoints_wrist=keypoints, wrist_pose_world=np.eye(4))
+    return SensorHandSample(keypoints, np.eye(4), raw={"qpos": qpos}, source_index=source_index)
 
 
-def test_mujoco_runtime_direct_commands_have_no_explicit_speed_limit():
-    """Verify direct execution sends every requested target in one command period.
+def _build_flow(
+    *,
+    backend: _FakeBackend | None = None,
+    mapper: _FakeMapper | None = None,
+    clock: _FakeClock | None = None,
+    startup_move_frames: int = 0,
+    smooth: bool = False,
+    evaluator=None,
+    realtime: bool = False,
+):
+    """Build a complete fake execution flow and its stateful components.
 
     Args:
-        None.
+        backend: Optional fake backend.
+        mapper: Optional fake mapper.
+        clock: Optional fake wall clock.
+        startup_move_frames: Valid frames using waypoint interpolation.
+        smooth: Whether output filtering uses alpha 0.3.
+        evaluator: Optional fake evaluator.
+        realtime: Whether the flow sleeps to pace command periods.
 
     Returns:
-        None.
+        Flow, backend, mapper, retargeter, output filter, and command policy.
     """
-    from teleoperation.mujoco_runtime import MujocoTeleoperationRuntime
-    from teleoperation.output import QposCommandLimiter
+    from teleoperation.config import load_teleoperation_mode_config
+    from teleoperation.flow import ExecutionFlow
+    from teleoperation.output import QposCommandLimiter, QposOutputFilter
 
-    clock = _FakeClock()
-    backend = _FakeBackend()
-    limiter = QposCommandLimiter(
+    clock = _FakeClock() if clock is None else clock
+    backend = _FakeBackend() if backend is None else backend
+    mapper = _FakeMapper() if mapper is None else mapper
+    retargeter = _FakeRetargeter()
+    mode = load_teleoperation_mode_config(
+        {
+            "name": "test",
+            "output": {"smooth_output_qpos": smooth, "smoothing_alpha": 0.3},
+        }
+    )
+    output_filter = QposOutputFilter(np.zeros(2), mode)
+    command_policy = QposCommandLimiter(
         initial_qpos=np.zeros(2),
         max_joint_speed=np.array([1.0, 2.0]),
         command_hz=20.0,
-        lower=np.array([-2.0, -2.0]),
-        upper=np.array([2.0, 2.0]),
+        lower=np.full(2, -2.0),
+        upper=np.full(2, 2.0),
     )
-    runtime = MujocoTeleoperationRuntime(
-        session=_FakeSession(),
+    flow = ExecutionFlow(
+        input=None,
+        observation_mapper=mapper,
+        retargeter=retargeter,
+        output_filter=output_filter,
+        evaluator=evaluator,
+        command_policy=command_policy,
         backend=backend,
-        command_limiter=limiter,
-        realtime=True,
+        realtime=realtime,
+        startup_move_frames=startup_move_frames,
         clock=clock,
         sleep=clock.sleep,
     )
+    return flow, backend, mapper, retargeter, output_filter, command_policy
 
-    first = runtime.step_observation(_observation((1.0, -1.0)))
-    for _ in range(19):
-        last = runtime.step_observation(_observation((1.0, -1.0)))
 
+def test_execution_flow_direct_commands_have_no_explicit_speed_limit():
+    """Direct execution sends each requested target in one command period."""
+    clock = _FakeClock()
+    backend = _FakeBackend()
+    flow, _, _, _, _, _ = _build_flow(backend=backend, clock=clock, realtime=True)
+
+    first = flow.step(_sample((1.0, -1.0)))
+    for index in range(1, 20):
+        last = flow.step(_sample((1.0, -1.0), source_index=index))
+
+    assert first.status is ExecutionStatus.EXECUTED
     np.testing.assert_allclose(first.command_qpos, [1.0, -1.0])
     np.testing.assert_allclose(last.command_qpos, [1.0, -1.0])
-    assert runtime.frame_count == 20
-    assert runtime.command_step_count == 20
-    assert runtime.retarget_frame_count == 20
+    assert flow.source_frame_count == 20
+    assert flow.retarget_frame_count == 20
+    assert flow.command_period_count == 20
     assert backend.simulation_time == pytest.approx(1.0)
     assert clock.now == pytest.approx(1.0)
     assert last.diagnostics["runtime_overrun"] == 0.0
-    assert last.diagnostics["command_periods_advanced"] == 1.0
-    assert last.diagnostics["startup_move_active"] == 0.0
 
 
-def test_mujoco_runtime_blocks_on_synchronized_startup_waypoints_then_switches_to_direct():
-    """Verify startup frames finish strict linear waypoints before direct execution.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-    """
-    from teleoperation.mujoco_runtime import MujocoTeleoperationRuntime
-    from teleoperation.output import QposCommandLimiter
-
+def test_execution_flow_blocks_on_startup_waypoints_then_switches_to_direct():
+    """Startup frames complete synchronized waypoints before direct execution."""
     clock = _FakeClock()
     backend = _FakeBackend()
-    observer_states = []
-    limiter = QposCommandLimiter(
-        initial_qpos=np.zeros(2),
-        max_joint_speed=np.array([1.0, 2.0]),
-        command_hz=20.0,
-        lower=np.array([-2.0, -2.0]),
-        upper=np.array([2.0, 2.0]),
-    )
-    runtime = MujocoTeleoperationRuntime(
-        session=_FakeSession(),
+    observed_commands: list[np.ndarray] = []
+    flow, _, _, _, _, _ = _build_flow(
         backend=backend,
-        command_limiter=limiter,
-        realtime=True,
-        startup_move_frames=1,
-        post_command_step=lambda: observer_states.append(backend.get_joint_pos()),
         clock=clock,
-        sleep=clock.sleep,
+        startup_move_frames=1,
+        realtime=True,
     )
+    flow.add_command_observer(lambda result: observed_commands.append(result.actual_qpos.copy()))
 
-    startup = runtime.step_observation(_observation((0.11, -0.21)))
-    direct = runtime.step_observation(_observation((1.0, -1.0)))
+    startup = flow.step(_sample((0.11, -0.21)))
+    direct = flow.step(_sample((1.0, -1.0), source_index=1))
 
     startup_commands = np.asarray(backend.command_history[:3])
     startup_deltas = np.diff(np.vstack([np.zeros(2), startup_commands]), axis=0)
@@ -292,87 +513,34 @@ def test_mujoco_runtime_blocks_on_synchronized_startup_waypoints_then_switches_t
     assert startup.diagnostics["command_periods_advanced"] == 3.0
     assert startup.diagnostics["startup_move_active"] == 1.0
     assert direct.diagnostics["command_periods_advanced"] == 1.0
-    assert direct.diagnostics["startup_move_active"] == 0.0
-    assert runtime.frame_count == 2
-    assert runtime.command_step_count == 4
-    assert runtime.retarget_frame_count == 2
-    assert backend.simulation_time == pytest.approx(0.2)
-    assert clock.now == pytest.approx(0.2)
-    assert len(observer_states) == 4
+    assert flow.command_period_count == 4
+    assert len(observed_commands) == 4
 
 
-def test_mujoco_runtime_holds_command_when_detection_is_missing():
-    """Verify a missing hand still advances physics without a new retarget result.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-    """
-    from teleoperation.mujoco_runtime import MujocoTeleoperationRuntime
-    from teleoperation.output import QposCommandLimiter
-
+def test_missing_and_premapping_frames_hold_without_consuming_startup_count():
+    """Waiting and missing samples each hold one period and preserve startup state."""
     backend = _FakeBackend()
-    backend.ctrl_joint_pos(np.array([0.2, -0.2]))
-    limiter = QposCommandLimiter(
-        initial_qpos=backend.get_target_joint_pos(),
-        max_joint_speed=np.ones(2),
-        command_hz=20.0,
-        lower=np.full(2, -1.0),
-        upper=np.full(2, 1.0),
-    )
-    runtime = MujocoTeleoperationRuntime(_FakeSession(), backend, limiter, realtime=False)
+    backend.target = np.array([0.2, -0.2])
+    backend.actual = backend.target.copy()
+    mapper = _FakeMapper((False, True))
+    flow, _, _, _, _, _ = _build_flow(backend=backend, mapper=mapper, startup_move_frames=1)
 
-    result = runtime.step_sensor_data(None)
+    waiting = flow.step(_sample((0.1, -0.1)))
+    startup = flow.step(_sample((0.1, -0.1), source_index=1))
+    missing = flow.step(_sample(None, source_index=2))
 
-    assert result.observation is None
-    assert result.requested_qpos is None
-    np.testing.assert_allclose(result.command_qpos, [0.2, -0.2])
-    assert backend.simulation_time == 0.05
-
-
-def test_mujoco_runtime_hold_does_not_consume_a_startup_move_frame():
-    """Verify only a successfully retargeted target advances the startup counter.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-    """
-    from teleoperation.mujoco_runtime import MujocoTeleoperationRuntime
-    from teleoperation.output import QposCommandLimiter
-
-    backend = _FakeBackend()
-    limiter = QposCommandLimiter(
-        initial_qpos=np.zeros(2),
-        max_joint_speed=np.ones(2),
-        command_hz=20.0,
-        lower=np.full(2, -1.0),
-        upper=np.full(2, 1.0),
-    )
-    runtime = MujocoTeleoperationRuntime(
-        _FakeSession(),
-        backend,
-        limiter,
-        realtime=False,
-        startup_move_frames=1,
-    )
-
-    hold = runtime.step_sensor_data(None)
-    startup = runtime.step_observation(_observation((0.1, -0.1)))
-
-    assert hold.diagnostics["startup_move_active"] == 0.0
+    assert waiting.status is ExecutionStatus.WAITING_FOR_MAPPING
+    np.testing.assert_allclose(waiting.command_qpos, [0.2, -0.2])
+    assert startup.status is ExecutionStatus.EXECUTED
     assert startup.diagnostics["startup_move_active"] == 1.0
-    assert startup.diagnostics["command_periods_advanced"] == 2.0
-    assert runtime.frame_count == 2
-    assert runtime.retarget_frame_count == 1
-    assert runtime.command_step_count == 3
+    assert missing.status is ExecutionStatus.HELD
+    assert flow.retarget_frame_count == 1
+    assert flow.source_frame_count == 3
+    assert backend.simulation_time == pytest.approx(0.2)
 
 
-def test_mujoco_runtime_reset_synchronizes_backend_session_and_limiter():
-    """Verify reset removes temporal state from every command-layer owner.
+def test_kinematic_backend_preserves_clipping_startup_and_hold_semantics():
+    """Ideal execution visualizes every bounded waypoint and missing-frame hold.
 
     Args:
         None.
@@ -380,158 +548,148 @@ def test_mujoco_runtime_reset_synchronizes_backend_session_and_limiter():
     Returns:
         None.
     """
-    from teleoperation.mujoco_runtime import MujocoTeleoperationRuntime
-    from teleoperation.output import QposCommandLimiter
+    from teleoperation.backends import KinematicRobotBackend
 
-    backend = _FakeBackend()
-    session = _FakeSession()
-    limiter = QposCommandLimiter(
-        initial_qpos=np.zeros(2),
-        max_joint_speed=np.ones(2),
-        command_hz=20.0,
-        lower=np.full(2, -1.0),
-        upper=np.full(2, 1.0),
-    )
-    runtime = MujocoTeleoperationRuntime(
-        session,
-        backend,
-        limiter,
-        realtime=False,
+    clock = _FakeClock()
+    backend = KinematicRobotBackend(initial_qpos=np.zeros(2), control_period=0.05)
+    flow, _, _, _, _, _ = _build_flow(
+        backend=backend,
+        clock=clock,
+        realtime=True,
         startup_move_frames=1,
     )
-    runtime.step_observation(_observation((1.0, -1.0)))
-
-    runtime.reset()
-
-    assert runtime.frame_count == 0
-    assert runtime.command_step_count == 0
-    assert runtime.retarget_frame_count == 0
-    assert backend.simulation_time == 0.0
-    np.testing.assert_allclose(backend.get_joint_pos(), np.zeros(2))
-    np.testing.assert_allclose(backend.get_target_joint_pos(), np.zeros(2))
-    np.testing.assert_allclose(limiter.previous_qpos, np.zeros(2))
-    assert len(session.reset_qpos) == 1
-    np.testing.assert_allclose(session.reset_qpos[0], np.zeros(2))
-
-
-def test_aligned_mujoco_driver_shares_prealignment_hold_and_reset_policy():
-    """Verify live and offline callers can share alignment lifecycle behavior.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-    """
-    from teleoperation.mujoco_runtime import (
-        AlignedMujocoTeleoperationDriver,
-        MujocoTeleoperationRuntime,
+    observed_commands: list[tuple[np.ndarray, np.ndarray]] = []
+    flow.add_command_observer(
+        lambda result: observed_commands.append((result.command_qpos.copy(), result.actual_qpos.copy()))
     )
-    from teleoperation.output import QposCommandLimiter
+
+    startup = flow.step(_sample((3.0, -3.0)))
+    held = flow.step(_sample(None, source_index=1))
+
+    assert startup.status is ExecutionStatus.EXECUTED
+    assert startup.diagnostics["command_periods_advanced"] == 40.0
+    np.testing.assert_allclose(startup.command_qpos, [2.0, -2.0])
+    np.testing.assert_allclose(startup.actual_qpos, [2.0, -2.0])
+    assert held.status is ExecutionStatus.HELD
+    np.testing.assert_allclose(held.command_qpos, [2.0, -2.0])
+    assert len(observed_commands) == 41
+    for command_qpos, actual_qpos in observed_commands:
+        np.testing.assert_allclose(actual_qpos, command_qpos)
+    np.testing.assert_allclose(observed_commands[-1][1], [2.0, -2.0])
+    assert flow.command_period_count == 41
+    assert clock.now == pytest.approx(2.05)
+
+
+def test_flow_reset_synchronizes_qpos_state_counters_input_and_mapping():
+    """The single reset entrypoint synchronizes all stateful dependencies."""
+    from unittest.mock import Mock
 
     backend = _FakeBackend()
-    session = _FakeSession()
-    limiter = QposCommandLimiter(
-        initial_qpos=np.zeros(2),
-        max_joint_speed=np.ones(2),
-        command_hz=20.0,
-        lower=np.full(2, -1.0),
-        upper=np.full(2, 1.0),
-    )
-    runtime = MujocoTeleoperationRuntime(session, backend, limiter, realtime=False)
-    alignment_results = iter((False, True, True))
-    alignment_frames = []
+    mapper = _FakeMapper()
+    flow, _, _, retargeter, output_filter, command_policy = _build_flow(backend=backend, mapper=mapper)
+    fake_input = Mock()
+    flow.input = fake_input
+    reset_states: list[np.ndarray] = []
+    flow.add_reset_observer(lambda qpos: reset_states.append(qpos.copy()))
+    flow.step(_sample((0.5, -0.5)))
 
-    def initialize_alignment(session_arg, sensor_data, robot_qpos):
-        """Record alignment attempts and return the configured result.
+    flow.reset(np.array([0.3, -0.4]))
 
-        Args:
-            session_arg: Session supplied by the shared driver.
-            sensor_data: Raw frame used for the alignment attempt.
-            robot_qpos: Current backend positions supplied by the driver.
-
-        Returns:
-            Next deterministic alignment outcome.
-        """
-        assert session_arg is session
-        np.testing.assert_allclose(robot_qpos, backend.get_joint_pos())
-        alignment_frames.append(sensor_data)
-        return next(alignment_results)
-
-    driver = AlignedMujocoTeleoperationDriver(runtime, initialize_alignment)
-    first_frame = _observation((0.1, -0.1))
-    second_frame = _observation((0.2, -0.2))
-    third_frame = _observation((0.3, -0.3))
-
-    first = driver.step(first_frame)
-    second = driver.step(second_frame)
-    driver.step(third_frame)
-
-    assert first.observation is None
-    assert second.observation is second_frame
-    assert alignment_frames == [first_frame, second_frame]
-    assert runtime.frame_count == 3
-    assert backend.simulation_time == pytest.approx(0.15)
-
-    driver.reset()
-    reset_frame = _observation((0.4, -0.4))
-    reset_result = driver.step(reset_frame)
-
-    assert alignment_frames == [first_frame, second_frame, reset_frame]
-    assert reset_result.observation is reset_frame
-    assert runtime.frame_count == 1
-    assert backend.simulation_time == pytest.approx(0.05)
-    assert len(session.reset_qpos) == 1
+    np.testing.assert_allclose(backend.get_target_joint_pos(), [0.3, -0.4])
+    np.testing.assert_allclose(retargeter.reset_history[-1], [0.3, -0.4])
+    np.testing.assert_allclose(output_filter.previous_qpos, [0.3, -0.4])
+    np.testing.assert_allclose(command_policy.previous_qpos, [0.3, -0.4])
+    fake_input.reset.assert_called_once_with()
+    assert mapper.reset_count == 1
+    assert flow.mapping_initialized is False
+    assert (flow.source_frame_count, flow.retarget_frame_count, flow.command_period_count) == (0, 0, 0)
+    np.testing.assert_allclose(reset_states[-1], [0.3, -0.4])
 
 
-def test_mujoco_runtime_source_has_no_artifact_replay_dependency():
-    """Protect the shared runtime from trajectory and replay coupling.
+def test_filtered_qpos_is_next_temporal_reference_but_evaluation_uses_raw_result():
+    """Preserve filter and evaluation ordering around the pure solver boundary."""
+    evaluator = _FakeEvaluator()
+    flow, _, _, retargeter, _, _ = _build_flow(smooth=True, evaluator=evaluator)
 
-    Args:
-        None.
+    first = flow.step(_sample((1.0, -1.0)))
+    flow.step(_sample((0.5, -0.5), source_index=1))
 
-    Returns:
-        None.
-    """
-    source = Path("src/teleoperation/mujoco_runtime.py").read_text(encoding="utf-8")
-
-    assert "retargeting_apps.artifacts" not in source
-    assert "offline_retargeting" not in source
-    assert "retarget_qpos" not in source
-    assert "teleoperation.avp_alignment" not in source
-    assert "parse_avp_stream_frame" not in source
+    np.testing.assert_allclose(first.retargeted_frame.retargeted_qpos, [0.3, -0.3])
+    np.testing.assert_allclose(evaluator.raw_qpos[0], [1.0, -1.0])
+    np.testing.assert_allclose(retargeter.previous_references[1], [0.3, -0.3])
+    assert first.retargeted_frame.diagnostics["position_err"] == 1.0
 
 
-def test_online_and_offline_apps_share_neutral_mujoco_runtime_builder():
-    """Keep shared construction outside both mode-specific application runners.
+def test_execution_flow_accounts_for_backend_timing_overrun():
+    """Injected timing reports compute overrun without a negative sleep."""
+    clock = _FakeClock()
+    backend = _FakeBackend(clock=clock, compute_time=0.06)
+    flow, _, _, _, _, _ = _build_flow(backend=backend, clock=clock, realtime=True)
 
-    Args:
-        None.
+    result = flow.step(_sample((0.1, -0.1)))
 
-    Returns:
-        None.
-    """
-    builder_source = Path("src/retargeting_apps/pipelines/mujoco_runtime_builder.py").read_text(encoding="utf-8")
-    runtime_source = Path("src/teleoperation/mujoco_runtime.py").read_text(encoding="utf-8")
-    online_path = Path("src/retargeting_apps/apps/mujoco_online_simulation.py")
-    online_source = online_path.read_text(encoding="utf-8")
-    offline_source = Path("src/retargeting_apps/apps/mujoco_offline_simulation.py").read_text(encoding="utf-8")
+    assert result.diagnostics["runtime_compute_time"] == pytest.approx(0.06)
+    assert result.diagnostics["runtime_overrun"] == pytest.approx(0.01)
+    assert result.diagnostics["runtime_wall_time"] == pytest.approx(0.06)
+    assert clock.now == pytest.approx(0.06)
 
-    assert online_path.is_file()
-    assert not Path("src/retargeting_apps/apps/mujoco_simulation.py").exists()
-    assert "def run(" in online_source
-    assert "def build_mujoco_runtime(" in builder_source
-    assert "def build_mujoco_runtime(" not in online_source
-    assert "def build_mujoco_runtime(" not in offline_source
-    assert "mujoco_runtime_builder.build_mujoco_runtime" in online_source
-    assert "mujoco_runtime_builder.build_mujoco_runtime" in offline_source
-    assert "class AlignedMujocoTeleoperationDriver" in runtime_source
-    assert "AlignedMujocoTeleoperationDriver(" in online_source
-    assert "AlignedMujocoTeleoperationDriver(" in offline_source
-    assert "driver.step(sensor_data)" in online_source
-    assert "driver.step(sensor_data)" in offline_source
-    assert "alignment_initialized" not in online_source
-    assert "initialize_avp_runtime_alignment" not in online_source
-    assert "initialize_avp_runtime_alignment" not in offline_source
-    assert not Path("src/teleoperation/offline.py").exists()
-    assert "mujoco_online_simulation import build_mujoco_runtime" not in offline_source
+
+def test_pull_run_resets_and_realigns_between_finite_cycles():
+    """Loop playback performs one full reset before reading the next cycle."""
+    hand_input = _FiniteInput()
+    mapper = _FakeMapper()
+    flow, backend, _, retargeter, _, _ = _build_flow(mapper=mapper)
+    flow.input = hand_input
+    flow.loop = True
+    flow.max_frames = 3
+
+    summary = flow.run()
+
+    assert summary.source_frames_processed == 3
+    assert summary.retarget_frames_processed == 3
+    assert summary.command_periods_advanced == 3
+    assert summary.cycles_completed == 2
+    assert hand_input.open_count == 1
+    assert hand_input.reset_count == 1
+    assert hand_input.close_count == 1
+    assert mapper.reset_count == 1
+    assert len(mapper.initialize_qpos) == 2
+    assert len(backend.reset_history) == 1
+    assert len(retargeter.reset_history) == 1
+
+
+def test_execution_results_detach_mutable_backend_and_diagnostic_arrays():
+    """Published results remain stable when producers mutate their buffers."""
+    flow, backend, _, _, _, _ = _build_flow()
+
+    result = flow.step(_sample((0.2, -0.3)))
+    backend.target[:] = 9.0
+
+    np.testing.assert_allclose(result.command_qpos, [0.2, -0.3])
+    with pytest.raises(ValueError):
+        result.command_qpos[0] = 1.0
+
+
+def test_flat_flow_source_has_no_nested_controller_or_artifact_dependency():
+    """Protect the final flow from old controllers and application artifacts."""
+    flow_source = Path("src/teleoperation/flow.py").read_text(encoding="utf-8")
+    composition_source = Path("src/retargeting_apps/composition.py").read_text(encoding="utf-8")
+    teleop_exe_source = Path("src/retargeting_apps/apps/teleop_exe.py").read_text(encoding="utf-8")
+
+    for obsolete in (
+        "TeleoperationSession",
+        "MujocoTeleoperationRuntime",
+        "AlignedMujocoTeleoperationDriver",
+        "MujocoStepResult",
+    ):
+        assert obsolete not in flow_source
+        assert obsolete not in composition_source
+    assert "retargeting_apps.artifacts" not in flow_source
+    assert "def build_execution_flow(" in composition_source
+    assert "build_execution_flow(config_data)" in teleop_exe_source
+    assert "flow.run()" in teleop_exe_source
+    assert not Path("src/retargeting_apps/pipelines").exists()
+    assert not Path("src/teleoperation/session.py").exists()
+    assert not Path("src/teleoperation/mujoco_runtime.py").exists()
+    assert not Path("src/retargeting_apps/apps/mujoco_online_simulation.py").exists()
+    assert not Path("src/retargeting_apps/apps/mujoco_offline_simulation.py").exists()

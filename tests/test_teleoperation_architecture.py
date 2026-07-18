@@ -1,7 +1,4 @@
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import Mock
-
 import numpy as np
 
 
@@ -34,8 +31,8 @@ def test_output_filter_is_independent_from_retargeting_solver_state():
     np.testing.assert_allclose(output_filter.previous_qpos, np.array([0.3, -0.3]))
 
 
-def test_session_reset_clears_temporal_commands_and_wrist_alignment():
-    """Reset one session without retaining command or alignment state.
+def test_avp_mapper_reset_clears_relative_wrist_alignment():
+    """Reset the mapper without retaining robot or sensor wrist origins.
 
     Args:
         None.
@@ -43,27 +40,16 @@ def test_session_reset_clears_temporal_commands_and_wrist_alignment():
     Returns:
         None.
     """
-    from teleoperation.inputs.adapter import HandObservationAdapter
-    from teleoperation.session import TeleoperationSession
+    from teleoperation.observation_mapping import AvpRelativeWristMapper
 
-    initial_qpos = np.array([0.1, -0.2])
-    reset_qpos = np.array([0.3, -0.4])
-    retargeter = SimpleNamespace(qpos_init=initial_qpos, reset=Mock())
-    output_filter = SimpleNamespace(reset=Mock())
-    input_adapter = HandObservationAdapter.__new__(HandObservationAdapter)
-    input_adapter.robot_initial_wrist_pose = np.eye(4)
-    input_adapter.detection_initial_wrist_pose = np.eye(4)
-    session = TeleoperationSession.__new__(TeleoperationSession)
-    session.retargeter = retargeter
-    session.output_filter = output_filter
-    session.input_adapter = input_adapter
+    mapper = AvpRelativeWristMapper.__new__(AvpRelativeWristMapper)
+    mapper._robot_initial_wrist_pose = np.eye(4)
+    mapper._sensor_initial_wrist_pose = np.eye(4)
 
-    session.reset(reset_qpos)
+    mapper.reset()
 
-    np.testing.assert_allclose(retargeter.reset.call_args.args[0], reset_qpos)
-    np.testing.assert_allclose(output_filter.reset.call_args.args[0], reset_qpos)
-    assert input_adapter.robot_initial_wrist_pose is None
-    assert input_adapter.detection_initial_wrist_pose is None
+    assert mapper._robot_initial_wrist_pose is None
+    assert mapper._sensor_initial_wrist_pose is None
 
 
 def test_retargeting_core_has_no_detector_or_output_filter_dependency():
@@ -105,3 +91,87 @@ def test_mujoco_backend_remains_headless_and_viewer_independent():
     assert "mujoco.viewer" not in source
     assert "open3d" not in source
     assert "cv2" not in source
+
+
+def test_flat_runtime_has_one_flow_owner_and_no_obsolete_controller_modules():
+    """Protect the final controller and directory ownership boundaries.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    teleoperation_root = Path("src/teleoperation")
+    flow_source = (teleoperation_root / "flow.py").read_text(encoding="utf-8")
+    teleop_exe_source = Path("src/retargeting_apps/apps/teleop_exe.py").read_text(encoding="utf-8")
+    ros_callback_source = Path(
+        "ws_ros2/src/retargeting_benchmark/src/robot_teleoperation_ros.py"
+    ).read_text(encoding="utf-8")
+
+    assert flow_source.count("class BatchRetargetFlow:") == 1
+    assert flow_source.count("class ExecutionFlow:") == 1
+    assert "Mujoco" not in flow_source
+    assert "self.backend.execute(" in flow_source
+    assert "self.input.read()" in flow_source
+    assert "self.observation_mapper.initialize(" in flow_source
+    assert "self.retargeter" in flow_source
+    for removed_path in (
+        teleoperation_root / "batch.py",
+        teleoperation_root / "session.py",
+        teleoperation_root / "mujoco_runtime.py",
+        teleoperation_root / "avp_alignment.py",
+        teleoperation_root / "timing.py",
+        teleoperation_root / "inputs" / "adapter.py",
+        Path("src/retargeting_apps/pipelines"),
+        Path("src/retargeting_apps/apps/mujoco_online_simulation.py"),
+        Path("src/retargeting_apps/apps/mujoco_offline_simulation.py"),
+    ):
+        assert not removed_path.exists()
+    assert "flow.run()" in teleop_exe_source
+    assert "while True" not in teleop_exe_source
+    assert "for frame" not in teleop_exe_source
+    assert "decode_rgb_sample" in ros_callback_source
+    assert "self.flow.step(sample)" in ros_callback_source
+
+
+def test_ros_command_and_real_robot_backends_expose_shared_atomic_contract():
+    """Keep ROS callback and hardware adapters compatible with ExecutionFlow.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    from retargeting_ros.backends import RosCommandBackend
+    from retargeting_ros.real_robot import RobotReal
+
+    commands: list[np.ndarray] = []
+
+    def execute(qpos: np.ndarray) -> np.ndarray:
+        """Record one callback command and return a measured state.
+
+        Args:
+            qpos: Requested callback target.
+
+        Returns:
+            Deterministic measured state.
+        """
+        commands.append(qpos.copy())
+        return qpos + 0.01
+
+    backend = RosCommandBackend(
+        initial_qpos=np.zeros(2),
+        control_period=0.05,
+        execute_callback=execute,
+    )
+
+    result = backend.execute(np.array([0.2, -0.3]))
+
+    np.testing.assert_allclose(commands[-1], [0.2, -0.3])
+    np.testing.assert_allclose(result.command_qpos, [0.2, -0.3])
+    np.testing.assert_allclose(result.actual_qpos, [0.21, -0.29])
+    for method_name in ("reset", "get_joint_pos", "get_target_joint_pos", "execute"):
+        assert hasattr(RobotReal, method_name)
+    assert hasattr(RobotReal, "control_period")

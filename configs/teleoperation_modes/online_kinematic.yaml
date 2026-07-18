@@ -1,0 +1,26 @@
+# @package _global_
+defaults:
+  - /inputs: avp
+  - /backends: kinematic
+  - _self_
+
+teleoperation_mode:
+  name: online_kinematic
+  robot_control:
+    use_hardware: false
+    use_virtual_hardware: false
+    use_high_freq_interp: false
+  output:
+    smooth_output_qpos: false
+    smoothing_alpha: 0.3
+  pipeline:
+    realtime: true
+    startup_move_frames: 0
+    ctrlrange_policy: clip
+    use_relative_wrist_alignment: true
+    missing_frame_policy: hold
+
+input:
+  mode: online
+  avp_ip: 192.168.52.6
+  max_frames: null

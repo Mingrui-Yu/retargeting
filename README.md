@@ -30,8 +30,8 @@ We welcome reproductions of this work and use of this codebase as a baseline. Pl
 | Path | Purpose |
 | --- | --- |
 | `src/retargeting/` | Pure retargeting domain types, config, kinematics, optimizers, and evaluation metrics. |
-| `src/teleoperation/` | Input adapters, output filters, and runtime composition around the pure retargeting core. |
-| `src/retargeting_apps/` | CLI composition, offline pipelines, artifacts, benchmark reports, and replay visualization. |
+| `src/teleoperation/` | Sensor-first inputs, observation mapping, output/command policies, robot backends, and flows. |
+| `src/retargeting_apps/` | CLI composition, offline artifacts, benchmark reports, and replay visualization. |
 | `src/retargeting_ros/` | Optional ROS adapter package for ROS messages, RViz, and real robot integration. |
 | `configs/` | Robot, retargeting, and app-level YAML configs. |
 | `assets/` | Robot URDF/MJCF assets and shared component meshes. |
@@ -49,7 +49,18 @@ retargeting_apps -> teleoperation -> retargeting
 retargeting_ros -> teleoperation / retargeting
 ```
 
-`retargeting.core.Retargeter` consumes a canonical `HandObservation` and produces raw qpos. It has no dependency on ROS, cameras, RViz, hardware control, or output smoothing. `teleoperation` owns detector adaptation, coordinate calibration, command smoothing, and runtime execution. `retargeting_apps` is the outer CLI and file/viewer composition layer.
+`retargeting.core.Retargeter` consumes a canonical `RetargetingHandObservation` and produces raw qpos. It has no
+dependency on ROS, cameras, RViz, hardware control, or output smoothing. `teleoperation` exposes one sensor-first
+boundary and one top-level execution owner:
+
+```text
+HandInput -> SensorHandSample -> HandObservationMapper -> RetargetingHandObservation
+          -> Retargeter -> output/command policy -> RobotBackend
+```
+
+`ExecutionFlow` owns mapping state, frame processing, atomic command periods, timing, observers, and reset. Offline
+artifact generation uses the parallel backend-free `BatchRetargetFlow`. `retargeting_apps` is the outer CLI and
+file/viewer composition layer.
 
 ## Install
 
@@ -85,32 +96,35 @@ pip install -e ".[avp]"
 pip install -e ".[dev]"
 ```
 
-For live AVP retargeting directly into headless MuJoCo, install both optional groups and run the online app:
+For live AVP retargeting directly into headless MuJoCo, install both optional groups and run the unified execution
+app with an online AVP input and MuJoCo backend:
 
 ```bash
 pip install -e ".[avp,mujoco]"
-python -m retargeting_apps.main app=mujoco_online_simulation avp_ip=192.168.52.6
+python -m retargeting_apps.main app=teleop_exe \
+  teleoperation_modes=online_mujoco input.avp_ip=192.168.52.6
 ```
 
 The app retargets at 20 Hz. By default, each detected target is commanded directly without an explicit target-speed
 limit, followed by 25 MuJoCo physics steps at `0.002 s`; it does not create or replay a joint trajectory. Set
-`simulator.realtime=false` for deterministic faster-than-wall-clock headless debugging, or `max_frames=N` for a
-bounded run.
+`teleoperation_mode.pipeline.realtime=false` for deterministic faster-than-wall-clock headless debugging, or
+`input.max_frames=N` for a bounded run.
 
-To load a raw offline human trajectory and retarget each frame directly into MuJoCo, use the offline simulation app:
+To load a raw offline human trajectory and retarget each frame directly into MuJoCo, use the same app with archived
+input:
 
 ```bash
 pip install -e ".[mujoco]"
-python -m retargeting_apps.main app=mujoco_offline_simulation \
-  data=tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz
+python -m retargeting_apps.main app=teleop_exe teleoperation_modes=offline_mujoco \
+  input.data=tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz
 ```
 
 This path reads only the raw `stream_*` human arrays and ignores any existing `retarget_qpos` in the input file. By
-default, the first 10 valid retargeted frames use synchronized linear actuator-target interpolation: every waypoint
+default, the first valid retargeted frame uses synchronized linear actuator-target interpolation: every waypoint
 respects `profile.teleoperation.max_joint_speed`, advances one `0.05 s` command period, and completes before the next
 source frame is consumed. Later frames send their targets directly without an explicit speed limit and advance one
-command period. Set `simulator.startup_move_frames=N` to tune the startup length or `0` to disable it. Frames without
-a valid target hold the previous command for one period and do not consume the startup count.
+command period. Set `teleoperation_mode.pipeline.startup_move_frames=N` to tune the startup length or `0` to disable
+it. Frames without a valid target hold the previous command for one period and do not consume the startup count.
 
 Use `start` and `end` to select a contiguous source interval. Set `loop=true` to repeat that interval continuously
 until Ctrl+C. Before every repeated cycle, MuJoCo, temporal retargeting references, startup counters, and wrist
@@ -122,13 +136,13 @@ passive `mjviser` adapter:
 
 ```bash
 pip install -e ".[mujoco-web]"
-python -m retargeting_apps.main app=mujoco_offline_simulation \
-  data=tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz \
-  viewer.enabled=true simulator.realtime=true loop=true
+python -m retargeting_apps.main app=teleop_exe teleoperation_modes=offline_mujoco \
+  input.data=tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz \
+  viewer.enabled=true teleoperation_mode.pipeline.realtime=true input.loop=true
 ```
 
 The app prints the Viser server address and, by default, waits for the first browser client before consuming source
-frames. `mjviser` reads the same MuJoCo `model/data` stepped by the offline runtime; it does not own or duplicate
+frames. `mjviser` reads the same MuJoCo `model/data` stepped by the execution flow; it does not own or duplicate
 physics stepping. Startup interpolation is published after every internal command period, so the browser shows the
 complete move rather than only its final state. Set `viewer.wait_for_client=false` for unattended runs or
 `viewer.keep_open_after_completion=true` to retain the final state until Ctrl+C. The default

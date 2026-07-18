@@ -4,6 +4,7 @@ import time
 from typing import List
 
 import numpy as np
+from teleoperation.backends.base import BackendStepResult
 
 try:
     from leap_hand.srv import LeapPosition, LeapPosVelEff
@@ -94,6 +95,18 @@ class RobotReal:
 
         self.record_video_command_pub = self.node.create_publisher(String, "/record_video_command", 10)
 
+    @property
+    def control_period(self) -> float:
+        """Return the low-frequency robot command period.
+
+        Args:
+            None.
+
+        Returns:
+            Command period in seconds.
+        """
+        return self.timestep
+
     def wait_for_initialization(self):
         self.node.get_logger().info("Waiting for initialization.")
         time.sleep(1.0)
@@ -170,15 +183,19 @@ class RobotReal:
         self.one_step_time_record = time.time()
 
     def ctrl_joint_pos(self, target_joint_pos):
-        target_joint_pos = np.asarray(target_joint_pos).tolist()
+        target_joint_pos = np.asarray(target_joint_pos, dtype=float)
+        if target_joint_pos.shape != (self.n_joints,) or not np.isfinite(target_joint_pos).all():
+            raise ValueError(f"target_joint_pos must be finite and have shape ({self.n_joints},).")
+        target_joint_pos_list = target_joint_pos.tolist()
         if self.use_high_freq_interp:
-            self._publish_robot_joint_pos_command(target_joint_pos)
+            self._publish_robot_joint_pos_command(target_joint_pos_list)
         else:
-            arm_joint_pos = target_joint_pos[: self.n_arm_joints]
-            hand_joint_pos = target_joint_pos[self.n_arm_joints :]
+            arm_joint_pos = target_joint_pos_list[: self.n_arm_joints]
+            hand_joint_pos = target_joint_pos_list[self.n_arm_joints :]
             self._publish_arm_joint_pos_command(arm_joint_pos)
             self._publish_hand_joint_pos_command(hand_joint_pos)
         self.target_joint_pos[:] = target_joint_pos
+        return self.target_joint_pos.copy()
 
     def update_joint_pos(self):
         """
@@ -201,6 +218,34 @@ class RobotReal:
 
     def get_target_joint_pos(self):
         return self.target_joint_pos.copy()
+
+    def reset(self, qpos=None) -> None:
+        """Synchronize the robot target and measured state for a new flow cycle.
+
+        Args:
+            qpos: Optional reset target; current measured state is used when omitted.
+
+        Returns:
+            None.
+        """
+        target = self.get_joint_pos(update=True) if qpos is None else np.asarray(qpos, dtype=float)
+        self.ctrl_joint_pos(target)
+        self.step()
+        self.update_joint_pos()
+
+    def execute(self, qpos: np.ndarray) -> BackendStepResult:
+        """Publish one robot target and complete one low-frequency period.
+
+        Args:
+            qpos: Requested robot joint positions.
+
+        Returns:
+            Applied command and measured post-period robot state.
+        """
+        command = self.ctrl_joint_pos(qpos)
+        self.step()
+        actual = self.get_joint_pos(update=True)
+        return BackendStepResult(command_qpos=command, actual_qpos=actual, diagnostics={})
 
     def start_record_video(self, data_dir):
         msg = String()
