@@ -1,0 +1,7 @@
+# @package input
+name: avp
+input_device: avp # apple vision pro
+world_to_robot:
+  rotation_euler_xyz_deg: [0.0, 0.0, 180.0]
+  translation: [0.7, 0.2, -1.0]
+use_relative_wrist_alignment: true

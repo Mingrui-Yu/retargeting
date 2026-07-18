@@ -1,0 +1,26 @@
+# @package _global_
+defaults:
+  - /retargeting_profiles: vector_wrist_joint_panda_leap_paxini
+  - /teleoperation_modes: offline_kinematic
+  - /solvers: nlopt_slsqp
+  - _self_
+
+app:
+  id: teleop_exe
+
+evaluate: false
+log_every_frames: 20
+
+viewer:
+  enabled: false
+  type: auto
+  host: 0.0.0.0
+  port: 9219
+  wait_for_client: true
+  keep_open_after_completion: false
+  camera_distance: -1.0
+  camera_azimuth: 120.0
+  camera_elevation: 20.0
+  human_keypoint_size: 0.005
+  initial_camera_position: [0.6, 0.6, 0.5]
+  initial_camera_look_at: [0.0, 0.0, 0.45]

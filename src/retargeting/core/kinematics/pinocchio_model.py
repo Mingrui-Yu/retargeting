@@ -135,7 +135,7 @@ class RobotPinocchio:
 
 
 if __name__ == "__main__":
-    from retargeting.config import load_robot_config
+    from retargeting.config.core import load_robot_config
 
     robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
     robot = RobotPinocchio(

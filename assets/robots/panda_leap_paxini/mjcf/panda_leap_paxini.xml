@@ -1,0 +1,280 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="panda_leap_paxini">
+  <compiler angle="radian" />
+  <size nkey="1" />
+  <visual>
+    <global offwidth="512" offheight="512" />
+  </visual>
+  <asset>
+    <mesh name="link0" content_type="model/stl" file="../meshes/panda/visual/link0.stl" />
+    <mesh name="link1" content_type="model/stl" file="../meshes/panda/visual/link1.stl" />
+    <mesh name="link2" content_type="model/stl" file="../meshes/panda/visual/link2.stl" />
+    <mesh name="link3" content_type="model/stl" file="../meshes/panda/visual/link3.stl" />
+    <mesh name="link4" content_type="model/stl" file="../meshes/panda/visual/link4.stl" />
+    <mesh name="link5" content_type="model/stl" file="../meshes/panda/visual/link5.stl" />
+    <mesh name="link6" content_type="model/stl" file="../meshes/panda/visual/link6.stl" />
+    <mesh name="link7" content_type="model/stl" file="../meshes/panda/visual/link7.stl" />
+    <mesh name="palm_lower" content_type="model/stl" file="../meshes/leap_hand/palm_lower.stl" />
+    <mesh name="mcp_joint" content_type="model/stl" file="../meshes/leap_hand/mcp_joint.stl" />
+    <mesh name="pip" content_type="model/stl" file="../meshes/leap_hand/pip.stl" />
+    <mesh name="dip" content_type="model/stl" file="../meshes/leap_hand/dip.stl" />
+    <mesh name="fingertip_base" content_type="model/stl" file="../meshes/leap_hand/fingertip_base.stl" />
+    <mesh name="thumb_pip" content_type="model/stl" file="../meshes/leap_hand/thumb_pip.stl" />
+    <mesh name="thumb_dip" content_type="model/stl" file="../meshes/leap_hand/thumb_dip.stl" />
+    <mesh name="thumb_fingertip_base" content_type="model/stl" file="../meshes/leap_hand/thumb_fingertip_base.stl" />
+    <mesh name="paxini_base" content_type="model/stl" file="../meshes/leap_hand/paxini_base.STL" scale="0.001 0.001 0.001" />
+    <mesh name="paxini_fingertip" content_type="model/stl" file="../meshes/leap_hand/paxini_fingertip.STL" />
+  </asset>
+  <worldbody>
+    <body name="panda_link0" gravcomp="1">
+      <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="1 1 1 1" mesh="link0" />
+      <geom type="mesh" rgba="1 1 1 1" mesh="link0" />
+      <body name="panda_link1" pos="0 0 0.333" gravcomp="1">
+        <joint name="panda_joint1" class="panda" pos="0 0 0" axis="0 0 1" range="-2.9671 2.9671" actuatorfrcrange="-87 87" />
+        <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="1 1 1 1" mesh="link1" />
+        <geom type="mesh" rgba="1 1 1 1" mesh="link1" />
+        <body name="panda_link2" quat="0.707107 -0.707107 0 0" gravcomp="1">
+          <joint name="panda_joint2" class="panda" pos="0 0 0" axis="0 0 1" range="-1.8326 1.8326" actuatorfrcrange="-87 87" />
+          <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="1 1 1 1" mesh="link2" />
+          <geom type="mesh" rgba="1 1 1 1" mesh="link2" />
+          <body name="panda_link3" pos="0 -0.316 0" quat="0.707107 0.707107 0 0" gravcomp="1">
+            <joint name="panda_joint3" class="panda" pos="0 0 0" axis="0 0 1" range="-2.9671 2.9671" actuatorfrcrange="-87 87" />
+            <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="1 1 1 1" mesh="link3" />
+            <geom type="mesh" rgba="1 1 1 1" mesh="link3" />
+            <body name="panda_link4" pos="0.0825 0 0" quat="0.707107 0.707107 0 0" gravcomp="1">
+              <joint name="panda_joint4" class="panda" pos="0 0 0" axis="0 0 1" range="-3.1416 0" actuatorfrcrange="-87 87" />
+              <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="1 1 1 1" mesh="link4" />
+              <geom type="mesh" rgba="1 1 1 1" mesh="link4" />
+              <body name="panda_link5" pos="-0.0825 0.384 0" quat="0.707107 -0.707107 0 0" gravcomp="1">
+                <joint name="panda_joint5" class="panda" pos="0 0 0" axis="0 0 1" range="-2.9671 2.9671" actuatorfrcrange="-12 12" />
+                <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="1 1 1 1" mesh="link5" />
+                <geom type="mesh" rgba="1 1 1 1" mesh="link5" />
+                <body name="panda_link6" quat="0.707107 0.707107 0 0" gravcomp="1">
+                  <joint name="panda_joint6" class="panda" pos="0 0 0" axis="0 0 1" range="-0.0873 3.8223" actuatorfrcrange="-12 12" />
+                  <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="1 1 1 1" mesh="link6" />
+                  <geom type="mesh" rgba="1 1 1 1" mesh="link6" />
+                  <body name="panda_link7" pos="0.088 0 0" quat="0.707107 0.707107 0 0" gravcomp="1">
+                    <joint name="panda_joint7" class="panda" pos="0 0 0" axis="0 0 1" range="-2.9671 2.9671" actuatorfrcrange="-12 12" />
+                    <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="1 1 1 1" mesh="link7" />
+                    <geom type="mesh" rgba="1 1 1 1" mesh="link7" />
+                    <body name="panda_link8" pos="0 0 0.107" gravcomp="1">
+                      <body name="palm_lower" pos="0.03 -0.07 0.02" quat="0 0.923879 -0.382684 0" gravcomp="1">
+                        <inertial pos="0 0 0" quat="0.497095 0.495942 -0.509424 0.497419" mass="0.237" diaginertia="0.000529322 0.000354076 0.000260868" />
+                        <geom pos="-0.0200952 0.0257578 -0.0347224" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.603922 0.14902 0.14902 1" mesh="palm_lower" />
+                        <geom pos="-0.0200952 0.0257578 -0.0347224" quat="1 0 0 0" type="mesh" rgba="0.603922 0.14902 0.14902 1" mesh="palm_lower" />
+                        <body name="mcp_joint" pos="-0.00709525 0.0230578 -0.0187224" quat="0.5 0.5 0.5 -0.5" gravcomp="1">
+                          <inertial pos="0 0 0" quat="0.388585 0.626468 -0.324549 0.592628" mass="0.044" diaginertia="1.47756e-05 1.31982e-05 6.0802e-06" />
+                          <joint name="joint_1" pos="0 0 0" axis="0 0 -1" range="-0.314 2.23" actuatorfrcrange="-0.95 0.95" />
+                          <geom pos="0.0084069 0.00776624 0.0146574" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="mcp_joint" />
+                          <geom pos="0.0084069 0.00776624 0.0146574" quat="1 0 0 0" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="mcp_joint" />
+                          <body name="pip" pos="-0.0122 0.0381 0.0145" quat="0.5 -0.5 -0.5 0.5" gravcomp="1">
+                            <inertial pos="0 0 0" quat="0.709913 0.704273 -0.000363156 0.00475427" mass="0.032" diaginertia="4.7981e-06 4.23406e-06 2.86184e-06" />
+                            <joint name="joint_0" pos="0 0 0" axis="0 0 -1" range="-1.047 1.047" actuatorfrcrange="-0.95 0.95" damping="0.003" />
+                            <geom pos="0.00964336 0.0003 0.000784034" quat="0.5 -0.5 -0.5 -0.5" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.74902 0.74902 0.74902 1" mesh="pip" />
+                            <geom pos="0.00964336 0.0003 0.000784034" quat="0.5 -0.5 -0.5 -0.5" type="mesh" rgba="0.74902 0.74902 0.74902 1" mesh="pip" />
+                            <body name="dip" pos="0.015 0.0143 -0.013" quat="0.5 0.5 -0.5 0.5" gravcomp="1">
+                              <inertial pos="0 0 0" quat="-0.252689 0.659216 0.238844 0.666735" mass="0.037" diaginertia="6.68256e-06 6.24841e-06 5.02002e-06" />
+                              <joint name="joint_2" pos="0 0 0" axis="0 0 -1" range="-0.506 1.885" actuatorfrcrange="-0.95 0.95" />
+                              <geom pos="0.0211334 -0.00843212 0.00978509" quat="0 -1 0 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="dip" />
+                              <geom pos="0.0211334 -0.00843212 0.00978509" quat="0 -1 0 0" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="dip" />
+                              <body name="fingertip" pos="-4.08806e-09 -0.0361 0.0002" gravcomp="1">
+                                <inertial pos="0 0 0" quat="0.706755 0.706755 0.0223155 0.0223155" mass="0.016" diaginertia="3.37527e-06 2.863e-06 1.54873e-06" />
+                                <joint name="joint_3" pos="0 0 0" axis="0 0 -1" range="-0.366 2.042" actuatorfrcrange="-0.95 0.95" />
+                                <geom pos="0.0132864 -0.00611424 0.0145" quat="0 1 0 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="fingertip_base" />
+                                <geom pos="0.0132864 -0.00611424 0.0145" quat="0 1 0 0" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="fingertip_base" />
+                                <body name="fingertip_new" pos="0 -0.017 0.0145" quat="0 -0.707107 0 0.707107" gravcomp="1">
+                                  <inertial pos="0.017 0 0.01" mass="1e-10" diaginertia="1e-10 1e-10 1e-10" />
+                                  <geom pos="0.0165 0 0.01" quat="2.67949e-08 0 1 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_base" />
+                                  <geom pos="0.0165 0 0.01" quat="2.67949e-08 0 1 0" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_base" />
+                                  <body name="fingertip_new_tip" pos="0 0.0235 0" quat="2.67949e-08 0 1 0" gravcomp="1">
+                                    <inertial pos="0 0 0" mass="1e-10" diaginertia="1e-10 1e-10 1e-10" />
+                                    <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_fingertip" />
+                                    <geom name="fingertip_new_g" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_fingertip" />
+                                    <body name="finger1_tip_center" pos="0 0.003 -0.011" quat="1.89469e-08 0.707107 0.707107 1.89469e-08" gravcomp="1">
+                                      <body name="finger1_tip_center_lower" pos="-0.02 0 0" gravcomp="1" />
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+                            </body>
+                          </body>
+                        </body>
+                        <body name="mcp_joint_2" pos="-0.00709525 -0.0223922 -0.0187224" quat="0.5 0.5 0.5 -0.5" gravcomp="1">
+                          <inertial pos="0 0 0" quat="0.388585 0.626468 -0.324549 0.592628" mass="0.044" diaginertia="1.47756e-05 1.31982e-05 6.0802e-06" />
+                          <joint name="joint_5" pos="0 0 0" axis="0 0 -1" range="-0.314 2.23" actuatorfrcrange="-0.95 0.95" />
+                          <geom pos="0.0084069 0.00776624 0.0146574" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="mcp_joint" />
+                          <geom pos="0.0084069 0.00776624 0.0146574" quat="1 0 0 0" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="mcp_joint" />
+                          <body name="pip_2" pos="-0.0122 0.0381 0.0145" quat="0.5 -0.5 -0.5 0.5" gravcomp="1">
+                            <inertial pos="0 0 0" quat="0.709913 0.704273 -0.000363156 0.00475427" mass="0.032" diaginertia="4.7981e-06 4.23406e-06 2.86184e-06" />
+                            <joint name="joint_4" pos="0 0 0" axis="0 0 -1" range="-1.047 1.047" actuatorfrcrange="-0.95 0.95" />
+                            <geom pos="0.00964336 0.0003 0.000784034" quat="0.5 -0.5 -0.5 -0.5" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.74902 0.74902 0.74902 1" mesh="pip" />
+                            <geom pos="0.00964336 0.0003 0.000784034" quat="0.5 -0.5 -0.5 -0.5" type="mesh" rgba="0.74902 0.74902 0.74902 1" mesh="pip" />
+                            <body name="dip_2" pos="0.015 0.0143 -0.013" quat="0.5 0.5 -0.5 0.5" gravcomp="1">
+                              <inertial pos="0 0 0" quat="-0.252689 0.659216 0.238844 0.666735" mass="0.037" diaginertia="6.68256e-06 6.24841e-06 5.02002e-06" />
+                              <joint name="joint_6" pos="0 0 0" axis="0 0 -1" range="-0.506 1.885" actuatorfrcrange="-0.95 0.95" />
+                              <geom pos="0.0211334 -0.00843212 0.00978509" quat="0 -1 0 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="dip" />
+                              <geom pos="0.0211334 -0.00843212 0.00978509" quat="0 -1 0 0" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="dip" />
+                              <body name="fingertip_2" pos="0 -0.0361 0.0002" gravcomp="1">
+                                <inertial pos="0 0 0" quat="0.706755 0.706755 0.0223155 0.0223155" mass="0.016" diaginertia="3.37527e-06 2.863e-06 1.54873e-06" />
+                                <joint name="joint_7" pos="0 0 0" axis="0 0 -1" range="-0.366 2.042" actuatorfrcrange="-0.95 0.95" />
+                                <geom pos="0.0132864 -0.00611424 0.0145" quat="0 1 0 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="fingertip_base" />
+                                <geom pos="0.0132864 -0.00611424 0.0145" quat="0 1 0 0" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="fingertip_base" />
+                                <body name="fingertip_2_new" pos="0 -0.017 0.0145" quat="0 -0.707107 0 0.707107" gravcomp="1">
+                                  <inertial pos="0.017 0 0.01" mass="1e-10" diaginertia="1e-10 1e-10 1e-10" />
+                                  <geom pos="0.0165 0 0.01" quat="2.67949e-08 0 1 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_base" />
+                                  <geom pos="0.0165 0 0.01" quat="2.67949e-08 0 1 0" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_base" />
+                                  <body name="fingertip_2_new_tip" pos="0 0.0235 0" quat="2.67949e-08 0 1 0" gravcomp="1">
+                                    <inertial pos="0 0 0" mass="1e-10" diaginertia="1e-10 1e-10 1e-10" />
+                                    <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_fingertip" />
+                                    <geom name="fingertip_2_new_g" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_fingertip" />
+                                    <body name="finger2_tip_center" pos="0 0.003 -0.011" quat="1.89469e-08 0.707107 0.707107 1.89469e-08" gravcomp="1">
+                                      <body name="finger2_tip_center_lower" pos="-0.02 0 0" gravcomp="1" />
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+                            </body>
+                          </body>
+                        </body>
+                        <body name="mcp_joint_3" pos="-0.00709525 -0.0678422 -0.0187224" quat="0.5 0.5 0.5 -0.5" gravcomp="1">
+                          <inertial pos="0 0 0" quat="0.388585 0.626468 -0.324549 0.592628" mass="0.044" diaginertia="1.47756e-05 1.31982e-05 6.0802e-06" />
+                          <joint name="joint_9" pos="0 0 0" axis="0 0 -1" range="-0.314 2.23" actuatorfrcrange="-0.95 0.95" />
+                          <geom pos="0.0084069 0.00776624 0.0146574" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="mcp_joint" />
+                          <geom pos="0.0084069 0.00776624 0.0146574" quat="1 0 0 0" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="mcp_joint" />
+                          <body name="pip_3" pos="-0.0122 0.0381 0.0145" quat="0.5 -0.5 -0.5 0.5" gravcomp="1">
+                            <inertial pos="0 0 0" quat="0.709913 0.704273 -0.000363156 0.00475427" mass="0.032" diaginertia="4.7981e-06 4.23406e-06 2.86184e-06" />
+                            <joint name="joint_8" pos="0 0 0" axis="0 0 -1" range="-1.047 1.047" actuatorfrcrange="-0.95 0.95" />
+                            <geom pos="0.00964336 0.0003 0.000784034" quat="0.5 -0.5 -0.5 -0.5" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.74902 0.74902 0.74902 1" mesh="pip" />
+                            <geom pos="0.00964336 0.0003 0.000784034" quat="0.5 -0.5 -0.5 -0.5" type="mesh" rgba="0.74902 0.74902 0.74902 1" mesh="pip" />
+                            <body name="dip_3" pos="0.015 0.0143 -0.013" quat="0.5 0.5 -0.5 0.5" gravcomp="1">
+                              <inertial pos="0 0 0" quat="-0.252689 0.659216 0.238844 0.666735" mass="0.037" diaginertia="6.68256e-06 6.24841e-06 5.02002e-06" />
+                              <joint name="joint_10" pos="0 0 0" axis="0 0 -1" range="-0.506 1.885" actuatorfrcrange="-0.95 0.95" />
+                              <geom pos="0.0211334 -0.00843212 0.00978509" quat="0 -1 0 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="dip" />
+                              <geom pos="0.0211334 -0.00843212 0.00978509" quat="0 -1 0 0" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="dip" />
+                              <body name="fingertip_3" pos="0 -0.0361 0.0002" gravcomp="1">
+                                <inertial pos="0 0 0" quat="0.706755 0.706755 0.0223155 0.0223155" mass="0.016" diaginertia="3.37527e-06 2.863e-06 1.54873e-06" />
+                                <joint name="joint_11" pos="0 0 0" axis="0 0 -1" range="-0.366 2.042" actuatorfrcrange="-0.95 0.95" />
+                                <geom pos="0.0132864 -0.00611424 0.0145" quat="0 1 0 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="fingertip_base" />
+                                <geom pos="0.0132864 -0.00611424 0.0145" quat="0 1 0 0" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="fingertip_base" />
+                                <body name="fingertip_3_new" pos="0 -0.017 0.0145" quat="0 -0.707107 0 0.707107" gravcomp="1">
+                                  <inertial pos="0.017 0 0.01" mass="1e-10" diaginertia="1e-10 1e-10 1e-10" />
+                                  <geom pos="0.0165 0 0.01" quat="2.67949e-08 0 1 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_base" />
+                                  <geom pos="0.0165 0 0.01" quat="2.67949e-08 0 1 0" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_base" />
+                                  <body name="fingertip_3_new_tip" pos="0 0.0235 0" quat="2.67949e-08 0 1 0" gravcomp="1">
+                                    <inertial pos="0 0 0" mass="1e-10" diaginertia="1e-10 1e-10 1e-10" />
+                                    <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_fingertip" />
+                                    <geom name="fingertip_3_new_g" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_fingertip" />
+                                    <body name="finger3_tip_center" pos="0 0.003 -0.011" quat="1.89469e-08 0.707107 0.707107 1.89469e-08" gravcomp="1">
+                                      <body name="finger3_tip_center_lower" pos="-0.02 0 0" gravcomp="1" />
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+                            </body>
+                          </body>
+                        </body>
+                        <body name="pip_4" pos="-0.0693952 -0.00124224 -0.0216224" quat="0.707107 0 0.707107 0" gravcomp="1">
+                          <inertial pos="0 0 0" quat="0.709913 0.704273 -0.000363156 0.00475427" mass="0.032" diaginertia="4.7981e-06 4.23406e-06 2.86184e-06" />
+                          <joint name="joint_12" pos="0 0 0" axis="0 0 -1" range="-0.349 2.094" actuatorfrcrange="-0.95 0.95" />
+                          <geom pos="-0.00535664 0.0003 0.000784034" quat="0.5 -0.5 -0.5 -0.5" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.74902 0.74902 0.74902 1" mesh="pip" />
+                          <geom pos="-0.00535664 0.0003 0.000784034" quat="0.5 -0.5 -0.5 -0.5" type="mesh" rgba="0.74902 0.74902 0.74902 1" mesh="pip" />
+                          <body name="thumb_pip" pos="0 0.0143 -0.013" quat="0.5 0.5 -0.5 0.5" gravcomp="1">
+                            <inertial pos="0 0 0" mass="0.003" diaginertia="5.93e-07 5.49e-07 2.24e-07" />
+                            <joint name="joint_13" pos="0 0 0" axis="0 0 -1" range="-0.47 2.443" actuatorfrcrange="-0.95 0.95" />
+                            <geom pos="0.0119619 0 -0.0158526" quat="0.707107 0.707107 0 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="thumb_pip" />
+                            <geom pos="0.0119619 0 -0.0158526" quat="0.707107 0.707107 0 0" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="thumb_pip" />
+                            <body name="thumb_dip" pos="0 0.0145 -0.017" quat="0.707107 -0.707107 0 0" gravcomp="1">
+                              <inertial pos="0 0 0" quat="0.708624 0.704906 0.00637342 0.0303153" mass="0.038" diaginertia="8.48742e-06 7.67823e-06 3.82835e-06" />
+                              <joint name="joint_14" pos="0 0 0" axis="0 0 -1" range="-1.2 1.9" actuatorfrcrange="-0.95 0.95" />
+                              <geom pos="0.0439687 0.057953 -0.00862868" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="thumb_dip" />
+                              <geom pos="0.0439687 0.057953 -0.00862868" quat="1 0 0 0" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="thumb_dip" />
+                              <body name="thumb_fingertip" pos="0 0.0466 0.0002" quat="0 0 0 1" gravcomp="1">
+                                <inertial pos="0 0 0" quat="0.704307 0.709299 0.006848 -0.0282727" mass="0.049" diaginertia="2.03882e-05 1.98443e-05 4.32049e-06" />
+                                <joint name="joint_15" pos="0 0 0" axis="0 0 -1" range="-1.34 1.88" actuatorfrcrange="-0.95 0.95" />
+                                <geom pos="0.0625595 0.0784597 0.0489929" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.603922 0.14902 0.14902 1" mesh="thumb_fingertip_base" />
+                                <geom pos="0.0625595 0.0784597 0.0489929" quat="1 0 0 0" type="mesh" rgba="0.603922 0.14902 0.14902 1" mesh="thumb_fingertip_base" />
+                                <body name="thumb_fingertip_new" pos="0 -0.03 -0.0145" quat="0 -0.707107 0 0.707107" gravcomp="1">
+                                  <inertial pos="0 0 0" mass="1e-10" diaginertia="1e-10 1e-10 1e-10" />
+                                  <geom pos="0.0165 0 0.01" quat="2.67949e-08 0 1 0" type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_base" />
+                                  <geom pos="0.0165 0 0.01" quat="2.67949e-08 0 1 0" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_base" />
+                                  <body name="thumb_fingertip_new_tip" pos="0 0.0235 0" quat="2.67949e-08 0 1 0" gravcomp="1">
+                                    <inertial pos="0 0 0" mass="1e-10" diaginertia="1e-10 1e-10 1e-10" />
+                                    <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_fingertip" />
+                                    <geom name="thumb_fingertip_new_g" type="mesh" rgba="0.866667 0.866667 0.0509804 1" mesh="paxini_fingertip" />
+                                    <body name="thumb_tip_center" pos="0 0.003 -0.011" quat="1.89469e-08 0.707107 0.707107 1.89469e-08" gravcomp="1">
+                                      <body name="thumb_tip_center_lower" pos="-0.02 0 0" gravcomp="1" />
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+                            </body>
+                          </body>
+                        </body>
+                        <body name="wrist" pos="-0.16 -0.04 -0.01" quat="0.707107 0 0.707107 0" gravcomp="1" />
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <contact>
+    <exclude body1="palm_lower" body2="mcp_joint" />
+    <exclude body1="palm_lower" body2="mcp_joint_2" />
+    <exclude body1="palm_lower" body2="mcp_joint_3" />
+    <exclude body1="palm_lower" body2="pip_4" />
+    <exclude body1="palm_lower" body2="thumb_pip" />
+    <exclude body1="palm_lower" body2="thumb_dip" />
+    <exclude body1="mcp_joint" body2="pip" />
+    <exclude body1="mcp_joint" body2="dip" />
+    <exclude body1="pip" body2="dip" />
+    <exclude body1="mcp_joint_2" body2="pip_2" />
+    <exclude body1="mcp_joint_2" body2="dip_2" />
+    <exclude body1="pip_2" body2="dip_2" />
+    <exclude body1="mcp_joint_3" body2="pip_3" />
+    <exclude body1="mcp_joint_3" body2="dip_3" />
+    <exclude body1="pip_3" body2="dip_3" />
+  </contact>
+  <actuator>
+    <general class="panda" name="panda_actuator_1" joint="panda_joint1" gainprm="4500" biasprm="0 -4500 -450" />
+    <general class="panda" name="panda_actuator_2" joint="panda_joint2" gainprm="4500" biasprm="0 -4500 -450" ctrlrange="-1.7628 1.7628" />
+    <general class="panda" name="panda_actuator_3" joint="panda_joint3" gainprm="3500" biasprm="0 -3500 -350" />
+    <general class="panda" name="panda_actuator_4" joint="panda_joint4" gainprm="3500" biasprm="0 -3500 -350" ctrlrange="-3.0718 -0.0698" />
+    <general class="panda" name="panda_actuator_5" joint="panda_joint5" gainprm="2000" biasprm="0 -2000 -200" forcerange="-12 12" />
+    <general class="panda" name="panda_actuator_6" joint="panda_joint6" gainprm="2000" biasprm="0 -2000 -200" forcerange="-12 12" ctrlrange="-0.0175 3.7525" />
+    <general class="panda" name="panda_actuator_7" joint="panda_joint7" gainprm="2000" biasprm="0 -2000 -200" forcerange="-12 12" />
+    <position joint="joint_0" name="actuator_0" class="Hand_Actuator" />
+    <position joint="joint_1" name="actuator_1" class="Hand_Actuator" />
+    <position joint="joint_2" name="actuator_2" class="Hand_Actuator" />
+    <position joint="joint_3" name="actuator_3" class="Hand_Actuator" />
+    <position joint="joint_4" name="actuator_4" class="Hand_Actuator" />
+    <position joint="joint_5" name="actuator_5" class="Hand_Actuator" />
+    <position joint="joint_6" name="actuator_6" class="Hand_Actuator" />
+    <position joint="joint_7" name="actuator_7" class="Hand_Actuator" />
+    <position joint="joint_8" name="actuator_8" class="Hand_Actuator" />
+    <position joint="joint_9" name="actuator_9" class="Hand_Actuator" />
+    <position joint="joint_10" name="actuator_10" class="Hand_Actuator" />
+    <position joint="joint_11" name="actuator_11" class="Hand_Actuator" />
+    <position joint="joint_12" name="actuator_12" class="Hand_Actuator" />
+    <position joint="joint_13" name="actuator_13" class="Hand_Actuator" />
+    <position joint="joint_14" name="actuator_14" class="Hand_Actuator" />
+    <position joint="joint_15" name="actuator_15" class="Hand_Actuator" />
+  </actuator>
+  <default>
+    <joint damping="0.01" armature="0.01" />
+    <default class="Hand_Actuator">
+      <position kp="3.0" dampratio="1" inheritrange="1" />
+    </default>
+    <default class="panda">
+      <joint armature="0.1" damping="1" axis="0 0 1" range="-2.8973 2.8973" />
+      <general dyntype="none" biastype="affine" ctrlrange="-2.8973 2.8973" forcerange="-87 87" />
+    </default>
+  </default>
+  <keyframe>
+    <key name="home" qpos="0 -0.7853981633974483 0 -2.356194490192345 0 1.570796326794897 0.7853981633974483 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0" ctrl="0 -0.7853981633974483 0 -2.356194490192345 0 1.570796326794897 0.7853981633974483 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0" />
+  </keyframe>
+</mujoco>

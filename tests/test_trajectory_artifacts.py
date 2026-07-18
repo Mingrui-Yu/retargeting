@@ -11,9 +11,9 @@ def _np():
 
 
 def test_runtime_output_layout_defaults(tmp_path):
-    from retargeting.artifacts.trajectory import resolve_runtime_result_dir
-    from retargeting.pipelines.benchmark_report import resolve_benchmark_output_dirs, runtime_name_from_result
-    from retargeting.apps.offline_retarget import resolve_output_dir
+    from retargeting_apps.artifacts.trajectory import resolve_runtime_result_dir
+    from retargeting_apps.benchmark_report import resolve_benchmark_output_dirs, runtime_name_from_result
+    from retargeting_apps.apps.offline_retarget import resolve_output_dir
 
     retarget_dir = resolve_output_dir(
         {"output_root": str(tmp_path / "outputs"), "run_name": "smoke"},
@@ -33,14 +33,14 @@ def test_runtime_output_layout_defaults(tmp_path):
 
 
 def test_runtime_result_dir_rejects_paths_as_run_names():
-    from retargeting.artifacts.trajectory import resolve_runtime_result_dir
+    from retargeting_apps.artifacts.trajectory import resolve_runtime_result_dir
 
     with pytest.raises(ValueError, match="single directory name"):
         resolve_runtime_result_dir("outputs/smoke/retargeting")
 
 
 def test_offline_retarget_post_actions_build_followup_configs(tmp_path, monkeypatch):
-    from retargeting.apps import offline_retarget
+    from retargeting_apps.apps import offline_retarget
 
     recorded = {}
 
@@ -74,7 +74,7 @@ def test_offline_retarget_post_actions_build_followup_configs(tmp_path, monkeypa
     actions = offline_retarget.run_post_retarget_actions(
         {
             "data": str(FIXTURE),
-            "detection_source": "configs/detection_sources/avp.yaml",
+            "input": "configs/inputs/avp.yaml",
             "start": 0,
             "end": 200,
             "stride": 1,
@@ -121,12 +121,12 @@ def test_offline_retargeting_result_artifact_round_trip(tmp_path):
     pytest.importorskip("torch")
     pytest.importorskip("scipy")
 
-    from retargeting.pipelines.offline_retargeting import (
+    from retargeting_apps.offline_retargeting import (
         create_robot_replay_context_from_metadata,
         run_offline_retargeting,
         trajectory_to_replay_frames,
     )
-    from retargeting.artifacts.trajectory import load_retargeting_trajectory, save_retargeting_trajectory
+    from retargeting_apps.artifacts.trajectory import load_retargeting_trajectory, save_retargeting_trajectory
 
     context, trajectory, metadata = run_offline_retargeting(
         data_file=str(FIXTURE),
@@ -165,9 +165,13 @@ def test_benchmark_summary_from_saved_result(tmp_path):
     pytest.importorskip("torch")
     pytest.importorskip("scipy")
 
-    from retargeting.pipelines.benchmark_report import compute_benchmark_metrics, run_benchmark_from_config, summarize_metrics
-    from retargeting.pipelines.offline_retargeting import run_offline_retargeting
-    from retargeting.artifacts.trajectory import save_retargeting_trajectory
+    from retargeting_apps.benchmark_report import (
+        compute_benchmark_metrics,
+        run_benchmark_from_config,
+        summarize_metrics,
+    )
+    from retargeting_apps.offline_retargeting import run_offline_retargeting
+    from retargeting_apps.artifacts.trajectory import save_retargeting_trajectory
 
     _, trajectory, metadata = run_offline_retargeting(
         data_file=str(FIXTURE),
@@ -211,7 +215,7 @@ def test_benchmark_summary_from_saved_result(tmp_path):
 def test_optimization_time_metric_skips_first_retargeted_frame():
     np = _np()
 
-    from retargeting.pipelines.benchmark_report import optimization_time_from_errors
+    from retargeting_apps.benchmark_report import optimization_time_from_errors
 
     optimization_time = optimization_time_from_errors(
         {"optimization_time": np.asarray([10.0, 0.1, 0.2])},
@@ -225,7 +229,7 @@ def test_benchmark_bar_summary_plot_from_metric_arrays(tmp_path):
     np = _np()
     pytest.importorskip("matplotlib")
 
-    from retargeting.pipelines.benchmark_report import write_metric_plots
+    from retargeting_apps.benchmark_report import write_metric_plots
 
     metrics = {
         "position_error": np.asarray([[0.01, 0.02, 0.03, 0.04]]),

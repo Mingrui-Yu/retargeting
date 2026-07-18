@@ -17,9 +17,6 @@ dependencies = [
     "tqdm",
 ]
 
-[project.scripts]
-retargeting = "retargeting.main:main"
-
 [project.optional-dependencies]
 avp = [
     "avp_stream",
@@ -28,7 +25,11 @@ dev = [
     "pytest",
 ]
 mujoco = [
-    "mujoco",
+    "mujoco>=3.0,<4",
+]
+mujoco-web = [
+    "mujoco>=3.6,<4",
+    "mjviser>=0.0.14,<0.1",
 ]
 replay = [
     "viser",
@@ -42,7 +43,7 @@ vision = [
 [tool.setuptools.packages.find]
 # Install the pinned utils_python submodule as the top-level ``mr_utils`` package.
 where = ["src", "third_party/utils_python"]
-include = ["retargeting*", "retargeting_ros*", "teleoperation*", "mr_utils*"]
+include = ["retargeting*", "retargeting_apps*", "retargeting_ros*", "teleoperation*", "mr_utils*"]
 
 # https://black.readthedocs.io/en/stable/the_black_code_style/current_style.html
 [tool.black]

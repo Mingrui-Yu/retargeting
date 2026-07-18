@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: MuJoCo Offline + mjviser (end=200)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "retargeting_apps.main",
+            "args": [
+                "app=mujoco_offline_simulation",
+                "viewer.enabled=true",
+                "simulator.realtime=true",
+                "end=200"
+            ],
+            "cwd": "${workspaceFolder}",
+            "python": "/home/ymr/miniconda3/envs/retargeting/bin/python",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ]
+}

@@ -4,6 +4,10 @@ model:
   type: urdf
   path: assets/robots/panda_leap_paxini/urdf/panda_leap_paxini.urdf
   path_is_symlink: false
+simulation_model:
+  type: mjcf
+  path: assets/robots/panda_leap_paxini/mjcf/panda_leap_paxini.xml
+  path_is_symlink: false
 actuated_joints:
   - panda_joint1
   - panda_joint2
@@ -29,13 +33,13 @@ actuated_joints:
   - joint_14
   - joint_15
 initial_qpos:
-  - 0.21511886
-  - -0.15896096
-  - -0.80094644
-  - -2.59708501
-  - -0.36324861
-  - 2.30919053
-  - 0.4965313
+  - 0
+  - -0.7853981633974483
+  - 0
+  - -2.356194490192345
+  - 0
+  - 1.570796326794897
+  - 0.7853981633974483
   - 0
   - 0.1
   - 0.1

@@ -1,7 +1,5 @@
 # Configuration and Development Guide
 
-> **Status:** This document has not been updated or tested; it will be updated in the future.
-
 ## Configuration
 
 Robot-specific, method-specific, and robot-method profile values are configured in YAML files instead of being edited directly in Python source.
@@ -23,7 +21,7 @@ Robot-specific, method-specific, and robot-method profile values are configured 
 Replay accepts an offline retarget runtime name and viewer overrides:
 
 ```bash
-python -m retargeting.main app=replay \
+python -m retargeting_apps.main app=replay \
   run_name=quickstart_leap \
   viewer.port=8090 \
   viewer.no_robot_mesh=true
@@ -51,11 +49,19 @@ assets/
 │   └── shadow_hand/
 ├── robots/
 │   ├── panda_leap_paxini/
+│   │   ├── manifest.yaml
+│   │   ├── meshes/
+│   │   ├── mjcf/
+│   │   └── urdf/
 │   └── panda_shadow/
 └── scenes/
 ```
 
-Robot configs should point to stable paths under `assets/robots/`. Shared component meshes live under `assets/meshes/`; robot URDF asset folders use local symlinks such as `panda`, `leap_hand`, and `shadow_hand` so URDF mesh paths stay relative and portable.
+Robot configs should point to stable paths under `assets/robots/`. `panda_leap_paxini` is a self-contained portable
+bundle: its manifest exposes both URDF and MJCF entry points, both descriptions resolve only bundle-local meshes, and
+the bundle contains no symlinks. `panda_shadow` continues to reuse component meshes under `assets/meshes/` through
+robot-local `panda` and `shadow_hand` symlinks. The shared component directories remain available for that layout and
+compatibility with older assets.
 
 For ROS robot description work, Xacro/URDF files are still available under `ws_ros2/src/my_robot_description/`.
 
@@ -148,6 +154,7 @@ Optional live-input dependencies:
 - RGB hand detection: `pip install -e ".[vision]"`
 - Vision Pro streaming: `pip install -e ".[avp]"`
 - MuJoCo-related paths: `pip install -e ".[mujoco]"`
+- MuJoCo Web visualization: `pip install -e ".[mujoco-web]"`
 - ROS/RViz/hardware: ROS2 Humble workspace and robot drivers
 
 ## Real Robot Control
@@ -187,6 +194,53 @@ Leap hand hardware details are in [ws_ros2/src/leaphand_ros2_module/readme.md](.
 
 ## Development
 
+### Package Boundaries
+
+The Python packages follow one dependency direction:
+
+```text
+retargeting_apps -> teleoperation -> retargeting
+       |                              ^
+       +------------------------------+
+
+retargeting_ros -> teleoperation / retargeting
+```
+
+- `retargeting` owns canonical domain types, core config, kinematics, optimizers, solvers, and pure metrics.
+- `teleoperation` owns sensor-first inputs, observation mapping, output/command policies, robot backends, and flows.
+- `retargeting_apps` is the only Hydra/CLI composition root and owns artifacts, reports, and replay visualization.
+- Every `configs/app/<id>.yaml` maps to `retargeting_apps.apps.<id>.run(config, argv)`. The dispatcher imports only the
+  selected whitelisted task. `retargeting_apps.composition` builds complete flows; apps do not own per-frame loops.
+- `retargeting_apps.offline_retargeting` and `retargeting_apps.benchmark_report` own artifact/report workflows. There
+  is no `retargeting_apps.pipelines` facade.
+- `retargeting_ros` owns optional ROS, RViz, and real-robot adapters. Compatibility scripts under `ws_ros2/` import
+  these canonical packages but are not imported by them.
+
+Core code must not import `teleoperation`, `retargeting_apps`, `retargeting_ros`, or optional runtime/viewer modules.
+Keep `retargeting.core.*` as the public algorithm path; do not flatten it as part of unrelated changes.
+
+The execution data path is:
+
+```text
+HandInput -> SensorHandSample -> HandObservationMapper -> RetargetingHandObservation
+          -> Retargeter -> QposOutputFilter -> QposCommandLimiter -> RobotBackend.execute
+```
+
+`ExecutionFlow` is the only stateful owner of this sequence. It also owns mapping initialization, missing-input
+hold behavior, wall-clock pacing, source/command counters, passive observers, and the reset contract. AVP live and
+archived acquisition share `teleoperation.inputs.avp.common.decode_avp_sample`; the optional `avp_stream` dependency
+is imported only by `AvpOnlineInput.open()`. Offline artifact generation uses `BatchRetargetFlow`, skips missing
+samples, and never creates a robot backend or execution result.
+
+After installation, both entry forms below use the same app registry and Hydra overrides:
+
+```bash
+retargeting app=offline_retarget end=1 run_name=smoke
+python -m retargeting_apps.main app=offline_retarget end=1 run_name=smoke
+```
+
+### Headless Checks
+
 Run the headless test suite from the repository root:
 
 ```bash
@@ -202,13 +256,110 @@ python -c "import retargeting; import retargeting_ros"
 Check Hydra replay config composition without starting the viewer:
 
 ```bash
-python -c "from retargeting.main import compose_hydra_base_config; cfg = compose_hydra_base_config(['app=replay','run_name=quickstart_leap','viewer.port=8090']); print(cfg['run_name'], cfg['viewer']['port'])"
+python -c "from retargeting_apps.main import compose_hydra_base_config; cfg = compose_hydra_base_config(['app=replay','run_name=quickstart_leap','viewer.port=8090']); print(cfg['run_name'], cfg['viewer']['port'])"
 ```
 
 Check Hydra offline retarget config composition:
 
 ```bash
-python -c "from retargeting.main import compose_hydra_base_config; cfg = compose_hydra_base_config(['app=offline_retarget','end=1','run_name=smoke']); print(cfg['data'], cfg['run_name'])"
+python -c "from retargeting_apps.main import compose_hydra_base_config; cfg = compose_hydra_base_config(['app=offline_retarget','end=1','run_name=smoke']); print(cfg['data'], cfg['run_name'])"
 ```
 
 Default tests should not start ROS, RViz, cameras, Vision Pro live streaming, real robots, Open3D GUI, or MuJoCo viewer.
+
+## Teleoperation Execution
+
+`app=teleop_exe` is the unified execution path, not a saved-trajectory replay. Teleoperation setup selection lives in
+`teleoperation_modes`; each setup composes `input`, `backend`, and pipeline policy. The same `ExecutionFlow` runs
+online AVP, archived AVP, MuJoCo, and pure kinematic execution. For live AVP into MuJoCo:
+
+```bash
+python -m retargeting_apps.main app=teleop_exe \
+  teleoperation_modes=online_mujoco input.avp_ip=192.168.52.6
+```
+
+The app takes the latest AVP frame, retargets it once, applies the actuator-range policy, sends the resulting qpos to
+the configured backend, and advances one 20 Hz command period before accepting the next frame. With the default
+`startup_move_frames=0`, there is no explicit target-speed limit. The MuJoCo backend's `0.002 s` physics timestep
+makes one command period exactly 25 MuJoCo steps.
+
+Robot-specific MJCF paths live under `simulation_model` in the robot config. Runtime timing and range behavior live
+in `configs/backends/*.yaml`; viewer dependencies are intentionally absent from the backend. For headless diagnostics,
+override `teleoperation_mode.pipeline.realtime=false` so the same fixed execution time is advanced without wall-clock
+sleeping. Select `teleoperation_modes=online_kinematic` or `teleoperation_modes=offline_kinematic` for pure
+command/actual qpos execution with no MuJoCo dependency.
+
+For raw offline human input, select `input.mode=offline` and set `input.data`. This app loads only the input NPZ's
+`stream_*` arrays and explicitly ignores any existing `retarget_qpos`. It initializes wrist alignment from the first
+valid raw human frame and retargets that same frame. The default `offline_kinematic` setup uses
+`startup_move_frames=0`, while `offline_mujoco` uses `startup_move_frames=1` and synchronously moves the actuator
+target to the first valid retarget result before consuming the next source frame. The command policy selects a
+shared integer waypoint count using `ceil(max(abs(delta) / (max_joint_speed / command_hz)))`; all joints therefore
+finish together and every commanded increment respects its configured speed. After startup, each valid target is
+sent directly without an explicit speed limit and advances one command period. Actuator ranges and MuJoCo force,
+servo, contact, and dynamics constraints remain active in both phases.
+
+Frames without a valid hand hold the preceding robot command for one period and do not consume the startup count.
+Offline execution selects `input.start` and `input.end` as a contiguous interval. Set `input.loop=true` to repeat that
+selected interval until Ctrl+C. Each repeated cycle resets the backend to the configured robot initial qpos, clears
+retargeter/filter/startup temporal state, and initializes relative wrist alignment again from the first valid frame.
+The configured `input.source_hz` must match the backend command rate until timestamp-based resampling is added. During
+startup, one source frame can advance multiple command periods, so simulation time intentionally exceeds the source
+timeline.
+
+### Execution Web Visualization
+
+`app=teleop_exe` can publish execution through a backend-aware Web viewer. With `viewer.type=auto`, a kinematic
+backend uses the standard Viser URDF adapter and a MuJoCo backend uses the passive `mjviser` adapter. Install
+`.[replay]` for standard Viser or `.[mujoco-web]` for the MuJoCo path:
+
+```bash
+pip install -e ".[mujoco-web]"
+python -m retargeting_apps.main app=teleop_exe teleoperation_modes=offline_mujoco \
+  viewer.enabled=true teleoperation_mode.pipeline.realtime=true input.loop=true
+```
+
+The adapter uses the same `MjModel` and `MjData` owned by `MujocoRobotBackend` and calls
+`ViserMujocoScene.update_from_mjdata()` after every flow command period, including every startup interpolation
+waypoint. It never calls `mj_step`; `ExecutionFlow` remains the sole owner of backend advancement. Viewer settings are
+application configuration rather than simulator-backend configuration:
+
+The returned mjviser tab group is extended with a read-only `Joint angles` tab. The adapter enumerates compiled
+MuJoCo joint ids, resolves each hinge joint through `model.jnt_qposadr`, and displays the corresponding actual
+`data.qpos` value in radians. The current Panda+Leap MJCF has 23 hinge joints, all of which are updated atomically
+after every viewer frame. No input callback is registered, so these fields cannot modify simulation state.
+
+Both `mjviser` and standard `viser` execution adapters share the same human-hand renderer. It transforms each
+canonical `RetargetingHandObservation` into robot-world MANO keypoints, skeleton segments, and a wrist frame, then
+updates persistent Viser handles once per completed source frame. A source frame without a valid observation, or a
+flow reset, hides the human nodes instead of leaving stale geometry visible. Robot state publication remains on the
+command-period observer so startup interpolation is still shown at full resolution. The mjviser adapter mounts its
+human nodes below mjviser's `/fixed_bodies` frame, which applies the same camera-tracking `scene_offset` used by the
+MuJoCo geometry. Turning `Track camera` on or off therefore moves both layers together.
+
+```yaml
+viewer:
+  enabled: false
+  type: auto
+  host: 0.0.0.0
+  port: 9219
+  wait_for_client: true
+  keep_open_after_completion: false
+  camera_distance: -1.0
+  camera_azimuth: 120.0
+  camera_elevation: 20.0
+  human_keypoint_size: 0.005
+  initial_camera_position: [0.6, 0.6, 0.5]
+  initial_camera_look_at: [0.0, 0.0, 0.45]
+```
+
+With `wait_for_client=true`, no source frame is consumed until a browser connects. Use
+`keep_open_after_completion=true` to retain the final scene until Ctrl+C. Binding `0.0.0.0` exposes the server on
+all interfaces; bind `127.0.0.1` and forward the configured port over SSH when direct network exposure is not
+appropriate. Offline execution with the recommended config can use `teleoperation_mode.pipeline.realtime=false` for
+faster-than-wall-clock runs; explicitly
+enable realtime pacing for a human-observable 20 Hz run. Viewer publication occurs before each period's remaining
+sleep, so its cost is included in realtime pacing without changing simulated time. In continuous mode, the same
+viewer remains bound to the existing `MjModel` and `MjData`; the app publishes the reset state before processing the
+next cycle. MuJoCo simulation time restarts at zero for every cycle, and Ctrl+C closes the viewer without applying
+`keep_open_after_completion`.

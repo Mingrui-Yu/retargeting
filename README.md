@@ -25,98 +25,65 @@ It provides:
 
 We welcome reproductions of this work and use of this codebase as a baseline. Please open an issue with any questions; we will address them and update the repository promptly.
 
-## Repository Layout
-
-| Path | Purpose |
-| --- | --- |
-| `src/retargeting/` | Core Python package for offline replay, config loading, kinematics, and retargeting logic. |
-| `src/teleoperation/` | Input adapters, output filters, and runtime composition around the pure retargeting core. |
-| `src/retargeting_ros/` | Optional ROS adapter package for ROS messages, RViz, and real robot integration. |
-| `configs/` | Robot, retargeting, and app-level YAML configs. |
-| `assets/` | Robot URDF/MJCF assets and shared component meshes. |
-| `tests/fixtures/` | Replay fixtures used by smoke tests and quickstart examples. |
-| `outputs/` | Default location for generated teleop, simulation, benchmark, and plot outputs. This path is gitignored. |
-| `ws_ros2/` | ROS2 workspace packages, launch files, robot descriptions, and compatibility entrypoints. |
-
-The intended dependency direction is:
-
-```text
-configs/assets -> input adapters -> retargeting.core -> output adapters -> apps/CLI / retargeting_ros
-```
-
-`retargeting.core.Retargeter` consumes a canonical `HandObservation` and produces raw qpos. It has no dependency on ROS, cameras, RViz, hardware control, or output smoothing. `teleoperation` owns detector adaptation, coordinate calibration, command smoothing, and the live runtime composition.
-
 ## Install
 
-The quickest path is the offline replay path. It does not require ROS, cameras, or robot hardware.
+The default setup supports offline retargeting, replay, and visualized MuJoCo teleoperation without ROS or robot hardware.
 
 ```bash
 git clone --recurse-submodules https://github.com/Mingrui-Yu/retargeting.git
 cd retargeting
 
-# Required when working from an existing clone that did not initialize submodules.
-git submodule update --init --recursive
-
 conda create -n retargeting -c conda-forge python=3.10.12 pinocchio
 conda activate retargeting
 
-pip install -e ".[replay]"
+pip install -e ".[replay,mujoco-web]"
 ```
 
-`mr_utils` is vendored from the pinned `third_party/utils_python` submodule and
-is installed together with `retargeting`; do not install it separately.
-
-Optional dependency groups are defined in `pyproject.toml`. Install only what you need:
+For an existing clone, initialize the pinned `mr_utils` submodule before installation:
 
 ```bash
-pip install -e ".[mujoco]"
-pip install -e ".[vision]"
-pip install -e ".[avp]"
-pip install -e ".[dev]"
+git submodule update --init --recursive
 ```
 
-Install the GPU-enabled PyTorch build that matches your CUDA driver and runtime from the [official PyTorch instructions](https://pytorch.org/). PyTorch is required for optimizer paths, but it is not pinned in `pyproject.toml` because the correct wheel depends on your CUDA environment. This codebase has been tested with CUDA 12.8 and PyTorch `2.11.0+cu128`.
-
-ROS/RViz and real robot paths additionally require ROS2 Humble and the ROS packages listed in [ROS And RViz](#ros-and-rviz).
+PyTorch is required by optimizer paths. Install the build matching your CUDA environment from the [official PyTorch instructions](https://pytorch.org/); it is not pinned because the correct wheel depends on the local CUDA runtime.
 
 ## Quickstart: Offline Replay
 
-Generate a reusable offline retargeting result from the repository root:
+From the repository root, retarget the bundled hand trajectory and open the result in the Viser Web viewer:
 
 ```bash
-python -m retargeting.main app=offline_retarget end=200 run_name=quickstart_leap
+python -m retargeting_apps.main app=offline_retarget end=200 run_name=quickstart_leap \
+  post.visualize.enabled=true
 ```
 
-The same command can optionally run follow-up steps immediately after saving the result:
+The terminal prints the viewer address. To open the saved result again without rerunning retargeting:
 
 ```bash
-python -m retargeting.main app=offline_retarget end=200 run_name=quickstart_leap post.benchmark.enabled=true
-python -m retargeting.main app=offline_retarget end=200 run_name=quickstart_leap post.visualize.enabled=true
+python -m retargeting_apps.main app=replay run_name=quickstart_leap
 ```
 
-Visualize the saved result in the `viser` web viewer:
+Optionally compute benchmark statistics and plots from the same result:
 
 ```bash
-python -m retargeting.main app=replay run_name=quickstart_leap
+python -m retargeting_apps.main app=benchmark run_name=quickstart_leap
 ```
 
-Compute benchmark statistics and plots from the same result:
+## Teleoperation Flow
+
+Run the bundled raw hand trajectory through the full teleoperation flow and visualize the robot in MuJoCo:
 
 ```bash
-python -m retargeting.main app=benchmark run_name=quickstart_leap
+python -m retargeting_apps.main app=teleop_exe teleoperation_modes=offline_mujoco \
+  viewer.enabled=true teleoperation_mode.pipeline.realtime=true input.loop=true
 ```
 
-Replay only plays artifacts saved by `app=offline_retarget`. The saved `metadata.yaml` supplies the robot, profile, and detection calibration needed to reconstruct the viewer context; replay does not rerun retargeting from raw AVP data.
+This runs the same execution path used by live teleoperation:
 
-If you only want to verify the package in a headless environment, run:
-
-```bash
-python -m pytest tests
+```text
+offline hand input -> observation mapping -> retargeting -> MuJoCo backend -> Web viewer
 ```
 
-## Detailed Documentation
-
-Configuration, asset layout, data and outputs, ROS/RViz, teleoperation, real robot control, and development notes are in [docs/configuration-and-development.md](docs/configuration-and-development.md).
+Open the viewer address printed in the terminal. Press `Ctrl+C` to stop playback.
 
 ## Citation
 

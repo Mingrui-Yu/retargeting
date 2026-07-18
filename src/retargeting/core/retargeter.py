@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 from sklearn.preprocessing import normalize
 
-from retargeting.config import (
+from retargeting.config.core import (
     RetargetingConfig,
     RetargetingObjectiveConfig,
     RetargetingProfileConfig,
@@ -16,8 +16,7 @@ from retargeting.config import (
     SolverConfig,
     default_solver_config,
 )
-from retargeting.core.types import RetargetingResult
-from retargeting.inputs import HandObservation
+from retargeting.core.types import RetargetingHandObservation, RetargetingResult
 from retargeting.core.optimizers import get_optimizer_class
 from retargeting.core.kinematics.adaptor import RobotAdaptor
 from mr_utils.utils_calc import quatXYZW2WXYZ, sciR, transformPositions
@@ -267,7 +266,7 @@ class Retargeter:
 
     def solve(
         self,
-        observation: HandObservation,
+        observation: RetargetingHandObservation,
         previous_qpos: np.ndarray | None = None,
     ) -> RetargetingResult:
         """Solve one canonical observation without input or output side effects.

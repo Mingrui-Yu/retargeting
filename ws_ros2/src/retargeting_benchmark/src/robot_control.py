@@ -11,7 +11,6 @@ from pynput import keyboard
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from robot_adaptor import RobotAdaptor
-from robot_mujoco import RobotMujoco
 from robot_pinocchio import RobotPinocchio
 from robot_pinocchio_env import RobotPinocchioEnv
 from robot_real import RobotReal

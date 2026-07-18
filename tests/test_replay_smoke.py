@@ -1,6 +1,4 @@
 from pathlib import Path
-import sys
-import types
 
 import pytest
 
@@ -88,26 +86,21 @@ def test_avp_teleop_replay_fixture_shape_and_expected_qpos():
     np.testing.assert_allclose(data["retarget_qpos"][0], expected_first_qpos, rtol=0, atol=1e-12)
 
 
-def test_avp_detector_static_detect_headless(monkeypatch):
-    # Exercise only AvpDetector.detect(), which is a pure parser for an
-    # already-recorded stream frame. A fake avp_stream module avoids requiring
-    # the live AVP dependency on the server.
+def test_avp_common_decoder_is_headless():
+    # Exercise only the shared AVP decoder for an already-recorded stream frame.
+    # Importing and decoding archived data must not require the live client.
     _np()
     pytest.importorskip("scipy")
 
-    fake_avp_stream = types.ModuleType("avp_stream")
-    fake_avp_stream.VisionProStreamer = object
-    monkeypatch.setitem(sys.modules, "avp_stream", fake_avp_stream)
-
-    from retargeting.inputs.avp import AvpDetector
+    from teleoperation.inputs.avp import decode_avp_sample
 
     data = _load_fixture()
     stream = _stream_frame(data, frame_idx=0)
-    num_box, hand_kps, _, wrist_pose = AvpDetector.detect(stream)
+    sample = decode_avp_sample(stream, source_index=0)
 
-    assert num_box == 1
-    assert hand_kps.shape == (21, 3)
-    assert wrist_pose.shape == (4, 4)
+    assert sample.keypoints_wrist.shape == (21, 3)
+    assert sample.wrist_pose_sensor.shape == (4, 4)
+    assert sample.source_index == 0
 
 
 def test_robot_pinocchio_loads_current_urdf_headless():
