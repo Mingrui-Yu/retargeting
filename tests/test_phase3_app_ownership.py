@@ -69,8 +69,8 @@ def test_application_modules_have_one_canonical_package_owner():
         assert importlib.util.find_spec(removed_module) is None
 
 
-def test_console_script_and_package_discovery_use_retargeting_apps():
-    """Keep the public command name while selecting the new composition root.
+def test_package_discovery_includes_retargeting_apps_without_console_script():
+    """Package the application root without exposing a console script.
 
     Args:
         None.
@@ -80,9 +80,8 @@ def test_console_script_and_package_discovery_use_retargeting_apps():
     """
     project_config = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
-    assert 'retargeting = "retargeting_apps.main:main"' in project_config
+    assert "[project.scripts]" not in project_config
     assert '"retargeting_apps*"' in project_config
-    assert 'retargeting = "retargeting.main:main"' not in project_config
 
 
 def test_app_configs_modules_and_entry_contracts_align():

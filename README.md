@@ -25,185 +25,65 @@ It provides:
 
 We welcome reproductions of this work and use of this codebase as a baseline. Please open an issue with any questions; we will address them and update the repository promptly.
 
-## Repository Layout
-
-| Path | Purpose |
-| --- | --- |
-| `src/retargeting/` | Pure retargeting domain types, config, kinematics, optimizers, and evaluation metrics. |
-| `src/teleoperation/` | Sensor-first inputs, observation mapping, output/command policies, robot backends, and flows. |
-| `src/retargeting_apps/` | CLI composition, offline artifacts, benchmark reports, and replay visualization. |
-| `src/retargeting_ros/` | Optional ROS adapter package for ROS messages, RViz, and real robot integration. |
-| `configs/` | Robot, retargeting, and app-level YAML configs. |
-| `assets/` | Robot URDF/MJCF assets and shared component meshes. |
-| `tests/fixtures/` | Replay fixtures used by smoke tests and quickstart examples. |
-| `outputs/` | Default location for generated teleop, simulation, benchmark, and plot outputs. This path is gitignored. |
-| `ws_ros2/` | ROS2 workspace packages, launch files, robot descriptions, and compatibility entrypoints. |
-
-The intended dependency direction is:
-
-```text
-retargeting_apps -> teleoperation -> retargeting
-       |                              ^
-       +------------------------------+
-
-retargeting_ros -> teleoperation / retargeting
-```
-
-`retargeting.core.Retargeter` consumes a canonical `RetargetingHandObservation` and produces raw qpos. It has no
-dependency on ROS, cameras, RViz, hardware control, or output smoothing. `teleoperation` exposes one sensor-first
-boundary and one top-level execution owner:
-
-```text
-HandInput -> SensorHandSample -> HandObservationMapper -> RetargetingHandObservation
-          -> Retargeter -> output/command policy -> RobotBackend
-```
-
-`ExecutionFlow` owns mapping state, frame processing, atomic command periods, timing, observers, and reset. Offline
-artifact generation uses the parallel backend-free `BatchRetargetFlow`. `retargeting_apps` is the outer CLI and
-file/viewer composition layer.
-
 ## Install
 
-The quickest path is the offline replay path. It does not require ROS, cameras, or robot hardware.
+The default setup supports offline retargeting, replay, and visualized MuJoCo teleoperation without ROS or robot hardware.
 
 ```bash
 git clone --recurse-submodules https://github.com/Mingrui-Yu/retargeting.git
 cd retargeting
 
-# Required when working from an existing clone that did not initialize submodules.
-git submodule update --init --recursive
-
 conda create -n retargeting -c conda-forge python=3.10.12 pinocchio
 conda activate retargeting
 
-pip install -e ".[replay]"
+pip install -e ".[replay,mujoco-web]"
 ```
 
-`mr_utils` is vendored from the pinned `third_party/utils_python` submodule and
-is installed together with `retargeting`; do not install it separately.
-
-The install also provides the `retargeting` console command. For example,
-`retargeting app=replay run_name=quickstart_leap` is equivalent to
-`python -m retargeting_apps.main app=replay run_name=quickstart_leap`.
-
-Optional dependency groups are defined in `pyproject.toml`. Install only what you need:
+For an existing clone, initialize the pinned `mr_utils` submodule before installation:
 
 ```bash
-pip install -e ".[mujoco]"
-pip install -e ".[mujoco-web]"
-pip install -e ".[vision]"
-pip install -e ".[avp]"
-pip install -e ".[dev]"
+git submodule update --init --recursive
 ```
 
-For live AVP retargeting directly into headless MuJoCo, install both optional groups and run the unified execution
-app with an online AVP input and MuJoCo backend:
-
-```bash
-pip install -e ".[avp,mujoco]"
-python -m retargeting_apps.main app=teleop_exe \
-  teleoperation_modes=online_mujoco input.avp_ip=192.168.52.6
-```
-
-The app retargets at 20 Hz. By default, each detected target is commanded directly without an explicit target-speed
-limit, followed by 25 MuJoCo physics steps at `0.002 s`; it does not create or replay a joint trajectory. Set
-`teleoperation_mode.pipeline.realtime=false` for deterministic faster-than-wall-clock headless debugging, or
-`input.max_frames=N` for a bounded run.
-
-To load a raw offline human trajectory and retarget each frame directly into MuJoCo, use the same app with archived
-input:
-
-```bash
-pip install -e ".[mujoco]"
-python -m retargeting_apps.main app=teleop_exe teleoperation_modes=offline_mujoco \
-  input.data=tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz
-```
-
-This path reads only the raw `stream_*` human arrays and ignores any existing `retarget_qpos` in the input file. By
-default, the first valid retargeted frame uses synchronized linear actuator-target interpolation: every waypoint
-respects `profile.teleoperation.max_joint_speed`, advances one `0.05 s` command period, and completes before the next
-source frame is consumed. Later frames send their targets directly without an explicit speed limit and advance one
-command period. Set `teleoperation_mode.pipeline.startup_move_frames=N` to tune the startup length or `0` to disable
-it. Frames without a valid target hold the previous command for one period and do not consume the startup count.
-
-Use `start` and `end` to select a contiguous source interval. Set `loop=true` to repeat that interval continuously
-until Ctrl+C. Before every repeated cycle, MuJoCo, temporal retargeting references, startup counters, and wrist
-alignment are reset to the configured robot initial qpos. The source is required to be 20 Hz until timestamp-based
-resampling is implemented; startup interpolation intentionally advances more simulated time than the source timeline.
-
-To watch execution in a browser, enable the backend-aware viewer. `viewer.type=auto` selects the standard Viser URDF
-adapter for a kinematic backend and the passive `mjviser` adapter for a MuJoCo backend. Install `.[replay]` for the
-standard adapter or the dedicated MuJoCo Web viewer extra for `mjviser`:
-
-```bash
-pip install -e ".[mujoco-web]"
-python -m retargeting_apps.main app=teleop_exe teleoperation_modes=offline_mujoco \
-  input.data=tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz \
-  viewer.enabled=true teleoperation_mode.pipeline.realtime=true input.loop=true
-```
-
-The app prints the Viser server address and, by default, waits for the first browser client before consuming source
-frames. `mjviser` reads the same MuJoCo `model/data` stepped by the execution flow; it does not own or duplicate
-physics stepping. Startup interpolation is published after every internal command period, so the browser shows the
-complete move rather than only its final state. Set `viewer.wait_for_client=false` for unattended runs or
-`viewer.keep_open_after_completion=true` to retain the final state until Ctrl+C. The default
-`viewer.host=0.0.0.0` listens on all interfaces; use `viewer.host=127.0.0.1` with SSH port forwarding when the server
-should not be exposed directly. Continuous playback exits and closes the viewer on Ctrl+C, so
-`viewer.keep_open_after_completion` applies only to finite runs.
-
-The mjviser UI includes a read-only `Joint angles` tab. It reports all 23 Panda+Leap hinge-joint values in radians
-from the live MuJoCo `data.qpos` after each completed command period. These are actual simulated joint angles rather
-than retargeting requests or actuator targets; the fields cannot write back to the simulation.
-
-Both execution viewer types also render the current mapped human hand as MANO keypoints, skeleton connections, and
-a wrist coordinate frame. Human geometry updates once per source frame from `RetargetingHandObservation`, while the
-robot continues updating after every backend command period. Frames without a valid mapped observation hide the
-human geometry immediately. In mjviser, the human nodes inherit the same camera-tracking scene offset as the MuJoCo
-model, so toggling `Track camera` does not change their relative alignment. Use `viewer.human_keypoint_size` to
-adjust the rendered keypoint size.
-
-Install the GPU-enabled PyTorch build that matches your CUDA driver and runtime from the [official PyTorch instructions](https://pytorch.org/). PyTorch is required for optimizer paths, but it is not pinned in `pyproject.toml` because the correct wheel depends on your CUDA environment. This codebase has been tested with CUDA 12.8 and PyTorch `2.11.0+cu128`.
-
-ROS/RViz and real robot paths additionally require ROS2 Humble and the ROS packages listed in [ROS And RViz](#ros-and-rviz).
+PyTorch is required by optimizer paths. Install the build matching your CUDA environment from the [official PyTorch instructions](https://pytorch.org/); it is not pinned because the correct wheel depends on the local CUDA runtime.
 
 ## Quickstart: Offline Replay
 
-Generate a reusable offline retargeting result from the repository root:
+From the repository root, retarget the bundled hand trajectory and open the result in the Viser Web viewer:
 
 ```bash
-python -m retargeting_apps.main app=offline_retarget end=200 run_name=quickstart_leap
+python -m retargeting_apps.main app=offline_retarget end=200 run_name=quickstart_leap \
+  post.visualize.enabled=true
 ```
 
-The same command can optionally run follow-up steps immediately after saving the result:
-
-```bash
-python -m retargeting_apps.main app=offline_retarget end=200 run_name=quickstart_leap post.benchmark.enabled=true
-python -m retargeting_apps.main app=offline_retarget end=200 run_name=quickstart_leap post.visualize.enabled=true
-```
-
-Visualize the saved result in the `viser` web viewer:
+The terminal prints the viewer address. To open the saved result again without rerunning retargeting:
 
 ```bash
 python -m retargeting_apps.main app=replay run_name=quickstart_leap
 ```
 
-Compute benchmark statistics and plots from the same result:
+Optionally compute benchmark statistics and plots from the same result:
 
 ```bash
 python -m retargeting_apps.main app=benchmark run_name=quickstart_leap
 ```
 
-Replay only plays artifacts saved by `app=offline_retarget`. The saved `metadata.yaml` supplies the robot, profile, and detection calibration needed to reconstruct the viewer context; replay does not rerun retargeting from raw AVP data.
+## Teleoperation Flow
 
-If you only want to verify the package in a headless environment, run:
+Run the bundled raw hand trajectory through the full teleoperation flow and visualize the robot in MuJoCo:
 
 ```bash
-python -m pytest tests
+python -m retargeting_apps.main app=teleop_exe teleoperation_modes=offline_mujoco \
+  viewer.enabled=true teleoperation_mode.pipeline.realtime=true input.loop=true
 ```
 
-## Detailed Documentation
+This runs the same execution path used by live teleoperation:
 
-Configuration, asset layout, data and outputs, ROS/RViz, teleoperation, real robot control, and development notes are in [docs/configuration-and-development.md](docs/configuration-and-development.md).
+```text
+offline hand input -> observation mapping -> retargeting -> MuJoCo backend -> Web viewer
+```
+
+Open the viewer address printed in the terminal. Press `Ctrl+C` to stop playback.
 
 ## Citation
 

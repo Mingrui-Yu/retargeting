@@ -17,9 +17,6 @@ dependencies = [
     "tqdm",
 ]
 
-[project.scripts]
-retargeting = "retargeting_apps.main:main"
-
 [project.optional-dependencies]
 avp = [
     "avp_stream",
