@@ -7,19 +7,19 @@ from typing import Any
 import numpy as np
 
 from retargeting.config import (
-    DetectionSourceConfig,
     RetargetingConfig,
     RetargetingProfileConfig,
     RobotConfig,
     SolverConfig,
-    TeleoperationModeConfig,
 )
 from retargeting.core import Retargeter
-from retargeting.inputs import HandObservation
+from retargeting.core.sequence import retarget_observation_sequence
+from retargeting.core.types import HandObservation
 from retargeting.core.kinematics.adaptor import RobotAdaptor
 from retargeting.evaluation.robot_metrics import RobotBenchmark
 from mr_utils.utils_calc import transformPositions
-from teleoperation.input import HandObservationAdapter
+from teleoperation.config import DetectionSourceConfig, TeleoperationModeConfig
+from teleoperation.inputs import HandObservationAdapter
 from teleoperation.output import QposOutputFilter
 
 try:
@@ -78,7 +78,7 @@ class TeleoperationSession:
 
     @property
     def detector(self) -> Any:
-        """Expose the device detector for transitional live-entrypoint compatibility.
+        """Expose the configured device detector to live input runners.
 
         Args:
             None.
@@ -88,17 +88,21 @@ class TeleoperationSession:
         """
         return self.input_adapter.detector
 
-    @property
-    def qpos_last(self) -> np.ndarray:
-        """Return the previous execution command retained by the output layer.
+    def reset(self, qpos: np.ndarray | None = None) -> None:
+        """Reset temporal command state and require fresh wrist alignment.
 
         Args:
-            None.
+            qpos: Optional command used as the next retargeting and filtering reference.
 
         Returns:
-            Previous filtered qpos command.
+            None.
         """
-        return self.output_filter.previous_qpos
+        reset_qpos = self.retargeter.qpos_init if qpos is None else np.asarray(qpos, dtype=float)
+        if reset_qpos.shape != self.retargeter.qpos_init.shape or not np.isfinite(reset_qpos).all():
+            raise ValueError("qpos must match the retargeter initial-qpos shape and contain only finite values.")
+        self.retargeter.reset(reset_qpos)
+        self.output_filter.reset(reset_qpos)
+        self.input_adapter.reset_alignment()
 
     def set_robot_init_wrist_pose(self, pose: np.ndarray) -> None:
         """Set the robot pose required by relative input alignment.
@@ -164,32 +168,17 @@ class TeleoperationSession:
         Returns:
             Filtered qpos command and algorithm/evaluation diagnostics.
         """
-        result = self.retargeter.solve(observation, previous_qpos=self.output_filter.previous_qpos)
+        result = retarget_observation_sequence(
+            (observation,),
+            self.retargeter,
+            previous_qpos=self.output_filter.previous_qpos,
+        )[0]
         diagnostics = {**self._evaluate(result.qpos, observation), **result.diagnostics}
         qpos = self.output_filter.apply(result.qpos)
         # Preserve the original temporal behavior: the objective references the
         # previous execution command, not an unobservable pre-filter solution.
         self.retargeter.previous_qpos = qpos.copy()
         return qpos, diagnostics
-
-    def hand_retarget(
-        self, hand_kps_in_wrist: np.ndarray, wrist_pose_in_world: np.ndarray
-    ) -> tuple[np.ndarray, dict[str, float]]:
-        """Retarget already-normalized hand geometry for compatibility callers.
-
-        Args:
-            hand_kps_in_wrist: Hand keypoints in the detected wrist frame.
-            wrist_pose_in_world: Wrist pose in robot world coordinates.
-
-        Returns:
-            Filtered qpos command and algorithm/evaluation diagnostics.
-        """
-        return self.retarget_observation(
-            HandObservation(
-                keypoints_wrist=np.asarray(hand_kps_in_wrist, dtype=float),
-                wrist_pose_world=np.asarray(wrist_pose_in_world, dtype=float),
-            )
-        )
 
     def detect_observation(
         self, sensor_data: Any, camera_K: np.ndarray | None = None

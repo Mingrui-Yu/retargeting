@@ -99,7 +99,7 @@ def test_avp_detector_static_detect_headless(monkeypatch):
     fake_avp_stream.VisionProStreamer = object
     monkeypatch.setitem(sys.modules, "avp_stream", fake_avp_stream)
 
-    from retargeting.inputs.avp import AvpDetector
+    from teleoperation.inputs.avp import AvpDetector
 
     data = _load_fixture()
     stream = _stream_frame(data, frame_idx=0)

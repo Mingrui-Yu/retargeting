@@ -1,4 +1,6 @@
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import numpy as np
 
@@ -6,20 +8,21 @@ import numpy as np
 def test_profile_separates_objective_runtime_from_command_limits():
     """The profile exposes distinct algorithm and teleoperation config domains."""
     from retargeting.config import load_retargeting_profile_config
+    from teleoperation.config import load_teleoperation_command_config
 
-    profile = load_retargeting_profile_config(
-        "configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"
-    )
+    profile_source = "configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"
+    profile = load_retargeting_profile_config(profile_source)
+    command_config = load_teleoperation_command_config(profile_source)
 
     assert profile.retargeting.arm_dof == 7
     assert len(profile.retargeting.joint_position_weights) == 23
     assert len(profile.retargeting.joint_velocity_weights) == 23
-    assert len(profile.teleoperation.max_joint_speed) == 23
+    assert len(command_config.max_joint_speed) == 23
 
 
 def test_output_filter_is_independent_from_retargeting_solver_state():
     """Output smoothing remains a stateful teleoperation concern."""
-    from retargeting.config import load_teleoperation_mode_config
+    from teleoperation.config import load_teleoperation_mode_config
     from teleoperation.output import QposOutputFilter
 
     output_filter = QposOutputFilter(
@@ -29,6 +32,38 @@ def test_output_filter_is_independent_from_retargeting_solver_state():
 
     np.testing.assert_allclose(output_filter.apply(np.array([1.0, -1.0])), np.array([0.3, -0.3]))
     np.testing.assert_allclose(output_filter.previous_qpos, np.array([0.3, -0.3]))
+
+
+def test_session_reset_clears_temporal_commands_and_wrist_alignment():
+    """Reset one session without retaining command or alignment state.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    from teleoperation.inputs.adapter import HandObservationAdapter
+    from teleoperation.session import TeleoperationSession
+
+    initial_qpos = np.array([0.1, -0.2])
+    reset_qpos = np.array([0.3, -0.4])
+    retargeter = SimpleNamespace(qpos_init=initial_qpos, reset=Mock())
+    output_filter = SimpleNamespace(reset=Mock())
+    input_adapter = HandObservationAdapter.__new__(HandObservationAdapter)
+    input_adapter.robot_initial_wrist_pose = np.eye(4)
+    input_adapter.detection_initial_wrist_pose = np.eye(4)
+    session = TeleoperationSession.__new__(TeleoperationSession)
+    session.retargeter = retargeter
+    session.output_filter = output_filter
+    session.input_adapter = input_adapter
+
+    session.reset(reset_qpos)
+
+    np.testing.assert_allclose(retargeter.reset.call_args.args[0], reset_qpos)
+    np.testing.assert_allclose(output_filter.reset.call_args.args[0], reset_qpos)
+    assert input_adapter.robot_initial_wrist_pose is None
+    assert input_adapter.detection_initial_wrist_pose is None
 
 
 def test_retargeting_core_has_no_detector_or_output_filter_dependency():
@@ -65,7 +100,7 @@ def test_mujoco_backend_remains_headless_and_viewer_independent():
     Returns:
         None.
     """
-    source = Path("src/retargeting/backends/mujoco.py").read_text(encoding="utf-8")
+    source = Path("src/teleoperation/backends/mujoco.py").read_text(encoding="utf-8")
 
     assert "mujoco.viewer" not in source
     assert "open3d" not in source

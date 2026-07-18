@@ -5,6 +5,7 @@ import pytest
 
 def test_robot_configs_load_and_validate_asset_paths():
     from retargeting.config import load_robot_config
+    from teleoperation.config import load_mujoco_robot_binding_config
 
     for config_path in [
         "configs/robots/panda_leap_paxini.yaml",
@@ -20,9 +21,9 @@ def test_robot_configs_load_and_validate_asset_paths():
         assert config.model.resolved_path().is_file()
         assert Path(config.robot_file_path).exists()
         if config.name == "panda_leap_paxini":
-            assert config.simulation_model is not None
-            assert config.simulation_model.type == "mjcf"
-            assert Path(config.simulation_file_path).is_file()
+            binding = load_mujoco_robot_binding_config(config_path, robot_config=config)
+            assert binding.model.type == "mjcf"
+            assert Path(binding.simulation_file_path).is_file()
         assert len(config.actuated_joints) == len(config.initial_qpos)
         assert config.wrist_frame_name in config.visual_frame_names
         assert config.benchmark.wrist_link_name in config.visual_frame_names
@@ -117,7 +118,7 @@ def test_retargeting_config_rejects_unknown_ablation_option():
 
 
 def test_detection_source_configs_load_detector_calibration():
-    from retargeting.config import load_detection_source_config
+    from teleoperation.config import load_detection_source_config
 
     avp_config = load_detection_source_config("configs/detection_sources/avp.yaml")
     rgb_config = load_detection_source_config("configs/detection_sources/rgb.yaml")
@@ -132,7 +133,7 @@ def test_detection_source_configs_load_detector_calibration():
 
 
 def test_teleoperation_mode_configs_load_runtime_flags():
-    from retargeting.config import load_teleoperation_mode_config
+    from teleoperation.config import load_teleoperation_mode_config
 
     simulation_config = load_teleoperation_mode_config("configs/teleoperation_modes/simulation.yaml")
     real_world_config = load_teleoperation_mode_config("configs/teleoperation_modes/real_world.yaml")
@@ -150,7 +151,7 @@ def test_teleoperation_mode_configs_load_runtime_flags():
 
 
 def test_default_teleoperation_mode_is_simulation():
-    from retargeting.config import load_teleoperation_mode_config
+    from teleoperation.config import load_teleoperation_mode_config
 
     config = load_teleoperation_mode_config(None)
 
@@ -160,7 +161,7 @@ def test_default_teleoperation_mode_is_simulation():
 
 
 def test_mujoco_simulator_config_uses_20_hz_integer_substeps():
-    """Verify the configured online command rate maps exactly to MuJoCo steps.
+    """Verify the configured command rate maps exactly to MuJoCo steps.
 
     Args:
         None.
@@ -168,7 +169,7 @@ def test_mujoco_simulator_config_uses_20_hz_integer_substeps():
     Returns:
         None.
     """
-    from retargeting.config import load_mujoco_simulation_config
+    from teleoperation.config import load_mujoco_simulation_config
 
     config = load_mujoco_simulation_config("configs/simulators/mujoco.yaml")
 
@@ -177,6 +178,55 @@ def test_mujoco_simulator_config_uses_20_hz_integer_substeps():
     assert config.physics_timestep == 0.002
     assert config.physics_steps_per_command == 25
     assert config.realtime is True
+    assert config.startup_move_frames == 0
+
+    configured = load_mujoco_simulation_config(
+        {"startup_move_frames": 10, "command_hz": 20.0, "physics_timestep": 0.002}
+    )
+    assert configured.startup_move_frames == 10
+    with pytest.raises(ValueError, match="startup_move_frames"):
+        load_mujoco_simulation_config({"startup_move_frames": -1})
+    with pytest.raises(ValueError, match="startup_move_frames"):
+        load_mujoco_simulation_config({"startup_move_frames": True})
+
+
+def test_mujoco_web_viewer_config_loads_and_validates_application_settings():
+    """Verify passive Web viewer settings remain in the application layer.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    from retargeting_apps.config import load_mujoco_web_viewer_config
+
+    config = load_mujoco_web_viewer_config(
+        {
+            "enabled": True,
+            "host": "127.0.0.1",
+            "port": 0,
+            "wait_for_client": False,
+            "keep_open_after_completion": True,
+            "camera_distance": 1.5,
+            "camera_azimuth": 90.0,
+            "camera_elevation": 30.0,
+        }
+    )
+
+    assert config.enabled is True
+    assert config.host == "127.0.0.1"
+    assert config.port == 0
+    assert config.wait_for_client is False
+    assert config.keep_open_after_completion is True
+    assert config.camera_distance == 1.5
+    assert config.camera_azimuth == 90.0
+    assert config.camera_elevation == 30.0
+
+    with pytest.raises(ValueError, match="port"):
+        load_mujoco_web_viewer_config({"port": 65536})
+    with pytest.raises(ValueError, match="camera settings"):
+        load_mujoco_web_viewer_config({"camera_distance": float("nan")})
 
 
 def test_retargeting_config_accepts_vector_wrist_joint_class():
@@ -207,7 +257,7 @@ def test_solver_configs_load_backend_specific_params():
 
 
 def test_offline_retarget_config_accepts_post_action_overrides():
-    from retargeting.main import compose_hydra_base_config
+    from retargeting_apps.main import compose_hydra_base_config
 
     config = compose_hydra_base_config(
         [
@@ -237,7 +287,7 @@ def test_offline_retarget_post_actions_reuse_standalone_app_defaults():
     Returns:
         None.
     """
-    from retargeting.main import compose_hydra_base_config
+    from retargeting_apps.main import compose_hydra_base_config
 
     config = compose_hydra_base_config(["app=offline_retarget", "output_root=/tmp/offline-output"])
     benchmark_post = config["post"]["benchmark"]
@@ -260,7 +310,7 @@ def test_offline_retarget_post_actions_reuse_standalone_app_defaults():
 
 
 def test_replay_app_config_loads_defaults():
-    from retargeting.main import compose_hydra_base_config
+    from retargeting_apps.main import compose_hydra_base_config
 
     config = compose_hydra_base_config(["app=replay"])
 
@@ -285,12 +335,12 @@ def test_base_config_selects_each_whitelisted_app():
     Returns:
         None.
     """
-    from retargeting.main import compose_hydra_base_config
+    from retargeting_apps.main import compose_hydra_base_config
 
     offline_config = compose_hydra_base_config(["app=offline_retarget"])
     replay_config = compose_hydra_base_config(["app=replay"])
     benchmark_config = compose_hydra_base_config(["app=benchmark"])
-    mujoco_config = compose_hydra_base_config(["app=mujoco_simulation"])
+    mujoco_online_config = compose_hydra_base_config(["app=mujoco_online_simulation"])
     mujoco_offline_config = compose_hydra_base_config(["app=mujoco_offline_simulation"])
 
     assert offline_config["app"]["id"] == "offline_retarget"
@@ -300,16 +350,22 @@ def test_base_config_selects_each_whitelisted_app():
     assert "profile" not in replay_config
     assert benchmark_config["app"]["id"] == "benchmark"
     assert "profile" not in benchmark_config
-    assert mujoco_config["app"]["id"] == "mujoco_simulation"
-    assert mujoco_config["profile"]["name"] == "vector_wrist_joint_panda_leap_paxini"
-    assert mujoco_config["simulator"]["command_hz"] == 20.0
-    assert "data" not in mujoco_config
-    assert "run_name" not in mujoco_config
+    assert mujoco_online_config["app"]["id"] == "mujoco_online_simulation"
+    assert mujoco_online_config["profile"]["name"] == "vector_wrist_joint_panda_leap_paxini"
+    assert mujoco_online_config["simulator"]["command_hz"] == 20.0
+    assert "data" not in mujoco_online_config
+    assert "run_name" not in mujoco_online_config
+    assert Path("configs/app/mujoco_online_simulation.yaml").is_file()
+    assert not Path("configs/app/mujoco_simulation.yaml").exists()
     assert mujoco_offline_config["app"]["id"] == "mujoco_offline_simulation"
     assert mujoco_offline_config["data"].endswith(".npz")
     assert mujoco_offline_config["source_hz"] == 20.0
+    assert mujoco_offline_config["loop"] is False
     assert mujoco_offline_config["simulator"]["command_hz"] == 20.0
     assert mujoco_offline_config["simulator"]["realtime"] is False
+    assert mujoco_offline_config["viewer"]["enabled"] is False
+    assert mujoco_offline_config["viewer"]["port"] == 9219
+    assert mujoco_offline_config["viewer"]["wait_for_client"] is True
     assert "run_name" not in mujoco_offline_config
 
 
@@ -322,14 +378,14 @@ def test_main_dispatcher_rejects_unknown_app_id():
     Returns:
         None.
     """
-    from retargeting.main import resolve_app_runner
+    from retargeting_apps.main import resolve_app_runner
 
     with pytest.raises(ValueError, match="Unsupported app.id"):
         resolve_app_runner({"app": {"id": "not_a_real_app"}})
 
 
 def test_replay_hydra_style_mapping_resolves_runtime_options():
-    from retargeting.apps.viser_retargeting_visualize import resolve_replay_options_from_config
+    from retargeting_apps.apps.replay import resolve_replay_options_from_config
 
     config = {
         "run_name": "example",
@@ -364,7 +420,7 @@ def test_replay_config_requires_a_saved_artifact():
     Returns:
         None.
     """
-    from retargeting.apps.viser_retargeting_visualize import resolve_replay_options_from_config
+    from retargeting_apps.apps.replay import resolve_replay_options_from_config
 
     with pytest.raises(ValueError, match="requires run_name"):
         resolve_replay_options_from_config({"viewer": {}})

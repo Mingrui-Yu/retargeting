@@ -12,14 +12,13 @@ from cv_bridge import CvBridge
 from robot_adaptor import RobotAdaptor
 from robot_pinocchio import RobotPinocchio
 from rviz_visualize import RvizVisualizer
+from teleoperation.config import load_detection_source_config, load_teleoperation_mode_config
 from teleoperation.session import TeleoperationSession
 from retargeting.config import (
-    load_detection_source_config,
     load_retargeting_config,
     load_retargeting_profile_config,
     load_robot_config,
     load_solver_config,
-    load_teleoperation_mode_config,
 )
 
 
@@ -97,7 +96,7 @@ class RobotTeleoperationRos(Node):
         if observation is not None:
             # visualize the human hand in rviz
             self.rviz_visualizer.publish_hand_detection_results(
-                observation.hand_kps_in_wrist, observation.wrist_pose_in_world, frame_id="world"
+                observation.keypoints_wrist, observation.wrist_pose_world, frame_id="world"
             )
 
             # visualize the robot hand in rviz

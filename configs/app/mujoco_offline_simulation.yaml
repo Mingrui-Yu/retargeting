@@ -15,10 +15,28 @@ data: tests/fixtures/avp_teleop_2025-01-16_20-27-43.npz
 source_hz: 20.0
 start: 0
 end: -1
+# Repeat the selected interval until interrupted, resetting all runtime state
+# before the first selected frame of each subsequent cycle.
+loop: false
 evaluate: false
 log_every_frames: 20
 
-# Offline processing advances a fixed 0.05 s of simulated time per source frame
-# without waiting for wall-clock pacing.
+# Offline processing advances 0.05 s per execution waypoint without waiting for
+# wall-clock pacing. Startup source frames may contain multiple waypoints.
 simulator:
   realtime: false
+  # For the first N valid retargeted frames, synchronously interpolate each
+  # actuator target to completion before consuming the next source frame.
+  startup_move_frames: 1
+
+# Optional passive Web visualization of the live MuJoCo model/data. Enable
+# simulator.realtime as well when the trajectory should play at wall-clock speed.
+viewer:
+  enabled: false
+  host: 0.0.0.0
+  port: 9219
+  wait_for_client: true
+  keep_open_after_completion: false
+  camera_distance: -1.0
+  camera_azimuth: 120.0
+  camera_elevation: 20.0

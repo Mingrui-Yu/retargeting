@@ -10,7 +10,7 @@ def test_configure_initial_camera_sets_initial_and_reset_view_pose():
     Returns:
         None.
     """
-    from retargeting.visualization.viser_replay import configure_initial_camera
+    from retargeting_apps.visualization.viser_replay import configure_initial_camera
 
     initial_camera = SimpleNamespace(position=None, look_at=None)
     server = SimpleNamespace(initial_camera=initial_camera)

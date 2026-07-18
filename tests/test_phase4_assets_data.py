@@ -34,6 +34,7 @@ def test_robot_configs_use_phase4_asset_paths():
 
 def test_retargeting_profiles_carry_robot_method_parameters():
     from retargeting.config import load_retargeting_config, load_retargeting_profile_config, load_robot_config
+    from teleoperation.config import load_teleoperation_command_config
 
     method_config = load_retargeting_config("configs/retargeting_methods/vector_wrist_joint.yaml")
     assert method_config.type == "VECTOR_WRIST_JOINT"
@@ -42,7 +43,7 @@ def test_retargeting_profiles_carry_robot_method_parameters():
         profile_config = load_retargeting_profile_config(config_path)
         robot_config = load_robot_config(profile_config.robot)
         retargeting_runtime_config = profile_config.retargeting
-        teleoperation_command_config = profile_config.teleoperation
+        teleoperation_command_config = load_teleoperation_command_config(config_path, robot_config=robot_config)
         qpos_size = len(robot_config.initial_qpos)
 
         assert profile_config.method == "configs/retargeting_methods/vector_wrist_joint.yaml"
@@ -56,7 +57,7 @@ def test_retargeting_profiles_carry_robot_method_parameters():
 
 
 def test_detection_source_configs_carry_detector_world_calibration():
-    from retargeting.config import load_detection_source_config
+    from teleoperation.config import load_detection_source_config
 
     for config_path in Path("configs/detection_sources").glob("*.yaml"):
         detection_source_config = load_detection_source_config(config_path)
@@ -67,7 +68,7 @@ def test_detection_source_configs_carry_detector_world_calibration():
 
 
 def test_teleoperation_mode_configs_carry_runtime_flags():
-    from retargeting.config import load_teleoperation_mode_config
+    from teleoperation.config import load_teleoperation_mode_config
 
     for config_path in Path("configs/teleoperation_modes").glob("*.yaml"):
         mode_config = load_teleoperation_mode_config(config_path)
@@ -169,7 +170,7 @@ def test_panda_leap_paxini_portable_mjcf_compiles_headlessly():
 
 
 def test_replay_app_requires_a_saved_artifact_not_raw_input_data():
-    from retargeting.main import compose_hydra_base_config
+    from retargeting_apps.main import compose_hydra_base_config
 
     config = compose_hydra_base_config(["app=replay"])
     assert config["run_name"] is None

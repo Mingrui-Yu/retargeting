@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import copy
 import json
 import os
 import sys
@@ -19,18 +18,23 @@ from robot_benchmark import RobotBenchmark
 from robot_control import RobotControl
 from robot_pinocchio import RobotPinocchio
 from robot_real import RobotReal
+from teleoperation.config import (
+    load_detection_source_config,
+    load_teleoperation_command_config,
+    load_teleoperation_mode_config,
+)
+from teleoperation.inputs.offline_avp import load_offline_avp_trajectory
+from teleoperation.avp_alignment import initialize_avp_alignment
 from teleoperation.session import TeleoperationSession
 from rviz_visualize import RvizVisualizer
 from utils.utils_keyboard import KeyboardListener
 
 ensure_retargeting_package()
 from retargeting.config import (
-    load_detection_source_config,
     load_retargeting_config,
     load_retargeting_profile_config,
     load_robot_config,
     load_solver_config,
-    load_teleoperation_mode_config,
 )
 
 
@@ -53,34 +57,12 @@ def flatten_stream_data(data_dict):
     return new_data_dict
 
 
-def rebuild_stream_data(data_dict):
-    """
-    Rebuld the stream data as a dict named 'stream'
-    """
-    prefix = "stream_"
-    n_steps = data_dict["stream_left_wrist"].shape[0]
-    new_data_dict = {"stream": []}
-    for i in range(n_steps):
-        new_data_dict["stream"].append({})
-
-    for key, value in data_dict.items():
-        if key.startswith(prefix):
-            remaining_key = key[len(prefix) :]
-            for step, array in enumerate(data_dict[key]):
-                new_data_dict["stream"][step][remaining_key] = copy.deepcopy(array)
-        else:
-            new_data_dict[key] = value
-
-    return new_data_dict
-
-
 class RobotTeleoperationMain:
     def __init__(self):
         # --------- hyper-parameters ---------
         repo_root = Path(__file__).resolve().parents[4]
-        profile_config = load_retargeting_profile_config(
-            repo_root / "configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"
-        )
+        profile_source = repo_root / "configs/retargeting_profiles/vector_wrist_joint_panda_leap_paxini.yaml"
+        profile_config = load_retargeting_profile_config(profile_source)
         detection_source_config = load_detection_source_config(repo_root / "configs/detection_sources/avp.yaml")
         robot_config = load_robot_config(repo_root / profile_config.robot)
         self.robot_config = robot_config
@@ -91,7 +73,8 @@ class RobotTeleoperationMain:
         )
         urdf_file_name = robot_config.robot_file_path
         actuated_joints_name = list(robot_config.actuated_joints)
-        self.max_joint_speed = list(profile_config.teleoperation.max_joint_speed)
+        command_config = load_teleoperation_command_config(profile_source, robot_config=robot_config)
+        self.max_joint_speed = list(command_config.max_joint_speed)
 
         self.avp_ip = "192.168.52.6"
         # self.avp_ip = "192.168.60.250"
@@ -148,7 +131,7 @@ class RobotTeleoperationMain:
             raise NotImplementedError()
 
         # check the retargeting type
-        print(self.robot_teleop.retarget_type)
+        print(retargeting_config.type)
 
         # for keyboard control
         self.keyboard_listener = KeyboardListener()
@@ -165,10 +148,8 @@ class RobotTeleoperationMain:
         print(f"Save stream data to {file}.")
 
     def load_data(self, file_name):
-        loaded_data = np.load(file_name)
-        data_dict = {key: loaded_data[key] for key in loaded_data.files}  # Convert npz data back to a dictionary
-        data = rebuild_stream_data(data_dict)
-        return data
+        trajectory = load_offline_avp_trajectory(file_name)
+        return {"stream": [trajectory.get_frame(frame_idx) for frame_idx in range(trajectory.n_frames)]}
 
     def main(self):
         # ----------- hyper-parameters -----------
@@ -226,20 +207,15 @@ class RobotTeleoperationMain:
             # -------- retargeting --------
             if i == i_start:  # set initial poses
                 init_joint_pos = self.robot_control.get_joint_pos(update=True)
-                init_tcp_pose = self.robot_model.get_frame_pose(
-                    "wrist", qpos=self.robot_adaptor.forward_qpos(init_joint_pos)
-                )
-                self.robot_teleop.set_robot_init_wrist_pose(init_tcp_pose)
-                _, _, _, wrist_pose = self.robot_teleop.detector.detect(r)
-                wrist_pose = self.robot_teleop.pose_from_detection_world_to_robot_world(wrist_pose)
-                self.robot_teleop.set_detection_source_init_wrist_pose(wrist_pose)
+                if not initialize_avp_alignment(self.robot_teleop, r, init_joint_pos):
+                    raise ValueError(f"Unable to initialize AVP alignment from frame {i}.")
 
             observation, qpos, err = self.robot_teleop.retarget_input(r)
             if observation is None:
                 i += 1
                 continue
-            hand_kps_in_wrist = observation.hand_kps_in_wrist
-            wrist_pose = observation.wrist_pose_in_world
+            hand_kps_in_wrist = observation.keypoints_wrist
+            wrist_pose = observation.wrist_pose_world
 
             # print(f"Frame time cost 2: {(time.time() - t_frame_start):.3f}")
 

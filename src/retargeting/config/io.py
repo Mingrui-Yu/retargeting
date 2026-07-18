@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -68,3 +69,20 @@ def load_config_data(path: str | Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"Expected mapping config in {config_path}.")
     return data
+
+
+def load_config_source(source: str | Path | Mapping[str, Any]) -> dict[str, Any]:
+    """Load typed-config source data from a path or composed mapping.
+
+    Args:
+        source: YAML path, plain mapping, or Hydra/OmegaConf-style mapping.
+
+    Returns:
+        Plain Python dictionary for schema construction.
+    """
+    if isinstance(source, Mapping) or hasattr(source, "items"):
+        data = to_plain_config_data(source)
+        if not isinstance(data, dict):
+            raise ValueError("Expected mapping config data.")
+        return data
+    return load_config_data(source)

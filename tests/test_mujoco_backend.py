@@ -16,12 +16,15 @@ def _build_backend(ctrlrange_policy: str = "clip"):
     Returns:
         Loaded robot config and headless MuJoCo backend.
     """
-    from retargeting.backends.mujoco import MujocoRobotBackend
     from retargeting.config import load_robot_config
+    from teleoperation.backends.mujoco import MujocoRobotBackend
+    from teleoperation.config import load_mujoco_robot_binding_config
 
-    robot_config = load_robot_config("configs/robots/panda_leap_paxini.yaml")
+    robot_source = "configs/robots/panda_leap_paxini.yaml"
+    robot_config = load_robot_config(robot_source)
+    simulator_binding = load_mujoco_robot_binding_config(robot_source, robot_config=robot_config)
     backend = MujocoRobotBackend(
-        model_path=robot_config.simulation_file_path,
+        model_path=simulator_binding.simulation_file_path,
         joint_names=robot_config.actuated_joints,
         initial_qpos=robot_config.initial_qpos,
         config={

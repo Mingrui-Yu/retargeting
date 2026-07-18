@@ -1,6 +1,6 @@
 import numpy as np
 
-from retargeting.config import RobotBenchmarkConfig
+from retargeting.config.core import RobotBenchmarkConfig
 from retargeting.core.kinematics.adaptor import RobotAdaptor
 
 
