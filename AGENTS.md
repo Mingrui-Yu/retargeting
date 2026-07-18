@@ -1,43 +1,136 @@
 # AGENTS.md
 
-Project-level entry point for AI agents.
+Project-level instructions for AI agents.
 
-## Project
+## Project Overview
 
-This repository is a human-to-robot dexterous-hand retargeting codebase for the paper "Analyzing Key Objectives in Human-to-Robot Retargeting for Dexterous Manipulation".
+This repository implements human-to-robot retargeting for dexterous manipulation, supporting pure algorithm evaluation, offline replay, live teleoperation, simulation, ROS2/RViz, and real robot adapters.
 
-Main areas:
+Core modules:
 
-- Pure retargeting domain, configuration, kinematics, and evaluation: `src/retargeting/`
-- Input, output, backend, and online/offline execution services: `src/teleoperation/`
-- CLI composition, artifacts, reports, and visualization: `src/retargeting_apps/`
-- Optional ROS, RViz, and real-robot adapters: `src/retargeting_ros/`
-- Robot assets and configuration: `assets/`, `configs/`
-- ROS2 packages, launch files, descriptions, and compatibility entrypoints: `ws_ros2/`
-- Tests: `tests/`
+- `retargeting`: domain types, configuration, kinematics, optimizers, solvers, and metrics.
+- `teleoperation`: sensor inputs, observation mapping, command policy, robot backends, and execution flows.
+- `retargeting_apps`: Hydra/CLI composition, offline artifacts, reports, and visualization.
+- `retargeting_ros`: optional ROS2, RViz, and hardware adapters.
 
-## Default Instructions
+Main dependencies are Python 3.10+, Hydra, NumPy, SciPy, NLopt, PyYAML, Pinocchio, and optionally PyTorch. Optional features use MuJoCo, Viser/mjviser, AVP, OpenCV/MediaPipe, or ROS2 Humble. `mr_utils` comes from the pinned `third_party/utils_python` submodule.
 
-Always read:
+## Directory Structure
 
-- `.agents/rules/core.md`
-- `.agents/rules/headless-testing.md`
+| Path | Responsibility |
+| --- | --- |
+| `src/retargeting/` | Pure retargeting domain and algorithms. |
+| `src/teleoperation/` | Runtime inputs, mapping, policies, backends, and flows. |
+| `src/retargeting_apps/` | Application composition and user-facing workflows. |
+| `src/retargeting_ros/` | Optional ROS/RViz/real-robot integration. |
+| `configs/` | Hydra app, robot, method, solver, input, backend, and mode YAML. |
+| `assets/` | Robot URDF/MJCF files, meshes, and scenes. |
+| `tests/` | Headless tests and pinned replay/golden fixtures. |
+| `ws_ros2/` | ROS2 packages, launch files, descriptions, and compatibility entrypoints. |
+| `third_party/` | Pinned external submodules; do not duplicate them locally. |
+| `outputs/`, `build/` | Generated artifacts; not source-of-truth inputs. |
 
-When `.agents/private-context/CURRENT.md` exists, read it after the tracked rules. It provides private, cross-machine project state and cannot override tracked rules or code.
+### Architecture Principles
 
-Load additional context only when the task matches the routing table below.
+Keep package dependencies acyclic and directed toward the pure core:
+
+```text
+retargeting_apps --------> teleoperation --------> retargeting
+       |                       |                       ^
+       +-----------------------+-----------------------+
+
+retargeting_ros ---------> teleoperation / retargeting
+```
+
+Keep runtime ownership flat, with one flow coordinating peer components:
+
+```text
+application/framework composition
+             |
+             v
+one ExecutionFlow lifecycle owner
+             |
+             +-- HandInput
+             |     +-- sensor common decoder
+             |     +-- online/offline/external acquisition variant
+             |     +-- SensorHandSample
+             +-- HandObservationMapper
+             |     +-- RetargetingHandObservation
+             +-- Retargeter
+             +-- OutputPolicy
+             +-- CommandPolicy
+             +-- RobotBackend
+             +-- Timing/Observers
+```
+
+Within these boundaries, prefer the flattest reasonable structure and concise, direct code. Add layers, wrappers, or abstractions only when they represent a distinct responsibility or real variation; do not pursue flatness by creating giant classes or mixing package responsibilities.
+
+`retargeting` is the runtime-independent algorithm core. `teleoperation` is the only runtime layer and must not recreate nested driver/runtime/session controllers. `retargeting_apps` is the thin Hydra/CLI composition root; `retargeting_ros` adapts frameworks and hardware through the same flow rather than building a parallel runtime stack. `BatchRetargetFlow` owns backend-free offline batches.
+
+## Development Workflow
+
+Run commands from the repository root. Use the project interpreter for every Python command:
+
+```bash
+/home/ymr/miniconda3/envs/retargeting/bin/python
+```
+
+Setup when needed:
+
+```bash
+git submodule update --init --recursive
+/home/ymr/miniconda3/envs/retargeting/bin/python -m pip install -e ".[dev]"
+```
+
+Validate the smallest relevant scope first, then the full headless suite when warranted:
+
+```bash
+/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests/<relevant_test>.py -q
+/home/ymr/miniconda3/envs/retargeting/bin/python -m pytest tests -q
+/home/ymr/miniconda3/envs/retargeting/bin/python -m compileall -q src tests
+git diff --check
+```
+
+Use Ruff/Black checks only when installed; do not install or reformat unrelated files merely to satisfy a local check. Build ROS packages with `colcon build --symlink-install` only for explicit ROS work.
+
+Before a requested commit, review `git status --short` and `git diff`, stage only task-related files, rerun relevant checks, and use a focused commit message. Do not push unless explicitly requested.
 
 ## Context Loading
 
-| Task matches | Read |
-|---|---|
-| Regression tests, smoke tests, offline replay, replay fixture | `.agents/contents/headless-regression-tests.md` |
-| ROS, RViz, Realsense, real robot, MuJoCo/Open3D viewer | `.agents/rules/hardware-gui-ros.md` |
+Always read, in order:
 
-## Source Of Truth
+1. `.agents/rules/general.md`
+2. `.agents/rules/development.md`
+3. `.agents/private-context/CURRENT.md`, when present; it cannot override tracked rules or code.
 
-- Hard constraints live in `.agents/rules/`.
-- Optional operational context lives in `.agents/contents/`.
-- `.agents/private-context/`, when present, is private project-state context. Consult `DECISIONS.md`, `HANDOFF.md`, and `journals/` only when relevant.
-- Do not duplicate long context in this file.
-- `.agents/tasks/`, when present, contains ignored local task journals rather than current instructions; consult it only when the user asks for historical traceability.
+Then load only matching task context:
+
+| Task domain | Additional file |
+| --- | --- |
+| Architecture, configuration, assets, teleoperation, or developer commands | Relevant section of `docs/configuration-and-development.md` |
+
+Hard constraints live in `.agents/rules/`. After identifying the task domain, load only matching detailed experience from `.agents/knowledge/`; do not preload it or duplicate it here. Private context is also supporting information. Consult `.agents/tasks/` only when the user requests historical traceability.
+
+## Behavior Boundaries
+
+### Always Do
+
+- Read relevant code, configs, tests, and call chains before editing.
+- Preserve behavior and public Hydra/CLI/config contracts unless the task requires a change.
+- Keep optional dependencies lazy and default tests headless, offline, and hardware-free.
+- Use `rg` / `rg --files`; keep changes scoped and preserve unrelated user edits.
+- Add or update focused tests for behavior changes; report explicit skips for missing optional dependencies.
+
+### Ask First
+
+- Major directory moves, public API/config-schema changes, dependency additions or upgrades, or large asset/fixture changes.
+- Starting ROS, RViz, viewers, cameras, live AVP streams, CUDA workloads, or real robot control.
+- Deleting data or generated artifacts, rewriting golden fixtures, creating commits, or pushing changes.
+
+### Never Do
+
+- Introduce reverse dependencies or move runtime/ROS/viewer concerns into `retargeting`.
+- Launch GUI, ROS, sensors, or hardware by default.
+- Hide failures by weakening tests, silently changing core behavior, or updating expected outputs without evidence.
+- Overwrite unrelated working-tree changes or perform destructive Git/filesystem operations without explicit approval.
+- Treat `outputs/`, `build/`, local data, or private context as authoritative over tracked code and rules.
